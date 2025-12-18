@@ -3,6 +3,7 @@ import {
   LayoutGrid,
   Info,
   ArrowRight,
+  ArrowUpRight,
 } from 'lucide-react';
 import extensions from './riscv_extensions.json';
 
@@ -52,6 +53,7 @@ const EncodingDiagram = ({ encoding }) => {
 
 const RISCVExplorer = () => {
   const [activeProfile, setActiveProfile] = useState(null);
+  const [activeVolume, setActiveVolume] = useState(null);
   const [selectedExt, setSelectedExt] = useState(null);
   const [selectedInstruction, setSelectedInstruction] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -901,6 +903,30 @@ const RISCVExplorer = () => {
   // ---------------------------------------------------------------------------
   // Derived helpers
   // ---------------------------------------------------------------------------
+  const volumeMembership = React.useMemo(() => {
+    const allIds = new Set(
+      Object.values(extensions)
+        .flat()
+        .filter(Boolean)
+        .map((ext) => ext.id)
+    );
+
+    const vol2Ids = new Set();
+
+    for (const ext of extensions.standard || []) {
+      if (['S', 'U', 'H', 'N'].includes(ext.id)) vol2Ids.add(ext.id);
+    }
+    for (const ext of extensions.s_mem || []) vol2Ids.add(ext.id);
+    for (const ext of extensions.s_interrupt || []) vol2Ids.add(ext.id);
+    for (const ext of extensions.s_trap || []) vol2Ids.add(ext.id);
+
+    const vol1Ids = new Set(Array.from(allIds).filter((id) => !vol2Ids.has(id)));
+    return {
+      I: vol1Ids,
+      II: vol2Ids,
+    };
+  }, []);
+
   const instructionMatchesQuery = (mnemonic, details, q) => {
     const needle = String(q || '').trim().toLowerCase();
     if (!needle) return false;
@@ -922,6 +948,16 @@ const RISCVExplorer = () => {
     const details = ext?.instructions?.[mnemonic];
     setSelectedInstruction(details ? { mnemonic, ...details } : null);
   }, []);
+
+  const isHighlightedByProfile = (id) => {
+    if (!activeProfile) return false;
+    return profiles[activeProfile].includes(id);
+  };
+
+  const isHighlightedByVolume = (id) => {
+    if (!activeVolume) return false;
+    return volumeMembership[activeVolume]?.has(id) ?? false;
+  };
 
   const extensionSearchIndexById = React.useMemo(() => {
     const index = new Map();
@@ -969,11 +1005,11 @@ const RISCVExplorer = () => {
   }, []);
 
   const isHighlighted = (id) => {
-    if (!activeProfile) return false;
-    return profiles[activeProfile].includes(id);
+    return isHighlightedByProfile(id) || isHighlightedByVolume(id);
   };
 
   const isDimmed = (id) => {
+    if (activeVolume) return false;
     if (!activeProfile) return false;
     return !profiles[activeProfile].includes(id);
   };
@@ -1015,11 +1051,16 @@ const RISCVExplorer = () => {
               : `${baseColor} hover:brightness-110`
           }
           ${isSelected ? 'z-20 shadow-xl shadow-yellow-900/40' : 'z-10'}
-        `}
-      >
-        <div className="flex items-center justify-between mb-0.5">
-          <span className="font-bold text-xs">{data.name}</span>
-        </div>
+	        `}
+	      >
+	        {isDiscontinued && (
+	          <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded border border-red-600/60 bg-red-950/40 text-[8px] font-mono uppercase tracking-tight text-red-200">
+	            Discontinued
+	          </span>
+	        )}
+	        <div className="flex items-center justify-between mb-0.5">
+	          <span className="font-bold text-xs">{data.name}</span>
+	        </div>
         <div className="text-[9px] leading-tight opacity-80 truncate">
           {data.desc}
         </div>
@@ -1114,27 +1155,72 @@ const RISCVExplorer = () => {
             </p>
           </div>
 
-          <div className="flex gap-2 mt-4 md:mt-0">
-            {Object.keys(profiles).map((profile) => (
-              <button
-                key={profile}
-                onClick={() =>
-                  setActiveProfile(activeProfile === profile ? null : profile)
-                }
-                className={`
-                  px-3 py-1 rounded text-xs font-bold border transition-all
-                  ${
-                    activeProfile === profile
-                      ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
-                  }
-                `}
-              >
-                {profile}
-              </button>
-            ))}
-          </div>
-        </div>
+	          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-4 md:mt-0">
+	            <div className="flex items-center gap-2">
+	              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+	                Profiles
+	              </span>
+	              <div className="flex gap-2">
+	                {Object.keys(profiles).map((profile) => (
+	                  <button
+	                    key={profile}
+	                    onClick={() =>
+	                      setActiveProfile((current) => {
+	                        setSelectedExt(null);
+	                        setSelectedInstruction(null);
+	                        setSearchMatches(null);
+	                        return current === profile ? null : profile;
+	                      })
+	                    }
+	                    className={`
+	                      px-3 py-1 rounded text-xs font-bold border transition-all
+	                      ${
+	                        activeProfile === profile
+	                          ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
+	                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+	                      }
+	                    `}
+	                  >
+	                    {profile}
+	                  </button>
+	                ))}
+	              </div>
+	            </div>
+
+	            <div className="hidden md:block h-7 w-px bg-slate-800" />
+
+	            <div className="flex items-center gap-2">
+	              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+	                Volumes
+	              </span>
+	              <div className="flex gap-2">
+	                {['I', 'II'].map((vol) => (
+	                  <button
+	                    key={vol}
+	                    onClick={() =>
+	                      setActiveVolume((current) => {
+	                        setSelectedExt(null);
+	                        setSelectedInstruction(null);
+	                        setSearchMatches(null);
+	                        return current === vol ? null : vol;
+	                      })
+	                    }
+	                    className={`
+	                      px-3 py-1 rounded text-xs font-bold border transition-all
+	                      ${
+	                        activeVolume === vol
+	                          ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
+	                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+	                      }
+	                    `}
+	                  >
+	                    Vol {vol}
+	                  </button>
+	                ))}
+	              </div>
+	            </div>
+	          </div>
+	        </div>
 
         {/* Main Grid */}
         <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min">
@@ -1171,14 +1257,14 @@ const RISCVExplorer = () => {
             </div>
           </div>
 
-          {/* 2. Standard */}
-          <div className="space-y-2 col-span-full">
-            <h3 className="text-emerald-400 text-xs font-bold uppercase flex items-center gap-2">
-              Standard
-            </h3>
-            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-              {extensions.standard.map((item) => (
-                <ExtensionBlock
+	          {/* 2. Single-Letter Extensions */}
+	          <div className="space-y-2 col-span-full">
+	            <h3 className="text-emerald-400 text-xs font-bold uppercase flex items-center gap-2">
+	              Single-Letter Extensions
+	            </h3>
+	            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+	              {extensions.standard.map((item) => (
+	                <ExtensionBlock
                   key={item.id}
                   data={item}
                   searchQuery={searchQuery}
@@ -1190,27 +1276,43 @@ const RISCVExplorer = () => {
 
           {/* 3. Z-Extensions (User Mode) */}
           <div className="col-span-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4 border-t border-slate-800">
-            <div className="space-y-2">
-              <h3 className="text-purple-400 text-xs font-bold uppercase flex items-center gap-2">
-                Bit Manipulation (Zb)
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {extensions.z_bit.map((item) => (
-                  <ExtensionBlock
+	            <div className="space-y-2">
+	              <h3 className="text-purple-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Bit Manipulation (Zb)
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_bit.map((item) => (
+	                  <ExtensionBlock
                     key={item.id}
                     data={item}
                     searchQuery={searchQuery}
                     colorClass="bg-purple-950/50 border-purple-800/50 text-purple-100"
                   />
                 ))}
-              </div>
-            </div>
+	              </div>
+	            </div>
 
-            <div className="space-y-2">
-              <h3 className="text-indigo-400 text-xs font-bold uppercase flex items-center gap-2">
-                Compression (Zc)
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
+	            <div className="space-y-2">
+	              <h3 className="text-amber-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Atomics (Za/Zic*)
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_atomics.map((item) => (
+	                  <ExtensionBlock
+	                    key={item.id}
+	                    data={item}
+	                    searchQuery={searchQuery}
+	                    colorClass="bg-amber-950/40 border-amber-800/50 text-amber-100"
+	                  />
+	                ))}
+	              </div>
+	            </div>
+
+	            <div className="space-y-2">
+	              <h3 className="text-indigo-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Compression (Zc)
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
                 {extensions.z_compress.map((item) => (
                   <ExtensionBlock
                     key={item.id}
@@ -1219,12 +1321,12 @@ const RISCVExplorer = () => {
                     colorClass="bg-indigo-950/50 border-indigo-800/50 text-indigo-100"
                   />
                 ))}
-              </div>
-            </div>
+	              </div>
+	            </div>
 
-            <div className="space-y-2">
-              <h3 className="text-pink-400 text-xs font-bold uppercase flex items-center gap-2">
-                Float & Numerics (Zf/Za)
+	            <div className="space-y-2">
+	              <h3 className="text-pink-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Float & Numerics (Zf/Za)
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {extensions.z_float.map((item) => (
@@ -1235,13 +1337,29 @@ const RISCVExplorer = () => {
                     colorClass="bg-pink-950/50 border-pink-800/50 text-pink-100"
                   />
                 ))}
-              </div>
-            </div>
+	              </div>
+	            </div>
 
-            <div className="space-y-2">
-              <h3 className="text-teal-400 text-xs font-bold uppercase flex items-center gap-2">
-                Vector Subsets (Zv/Zve)
-              </h3>
+	            <div className="space-y-2">
+	              <h3 className="text-fuchsia-300 text-xs font-bold uppercase flex items-center gap-2">
+	                Additional Base ISA
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_additional_base.map((item) => (
+	                  <ExtensionBlock
+	                    key={item.id}
+	                    data={item}
+	                    searchQuery={searchQuery}
+	                    colorClass="bg-fuchsia-950/40 border-fuchsia-800/40 text-fuchsia-100"
+	                  />
+	                ))}
+	              </div>
+	            </div>
+
+	            <div className="space-y-2">
+	              <h3 className="text-teal-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Vector Subsets (Zv/Zve)
+	              </h3>
               <div className="grid grid-cols-2 gap-2">
                 {extensions.z_vector.map((item) => (
                   <ExtensionBlock
@@ -1254,13 +1372,13 @@ const RISCVExplorer = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-red-400 text-xs font-bold uppercase flex items-center gap-2">
-                Security & Control (Zi)
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {extensions.z_security.map((item) => (
-                  <ExtensionBlock
+	            <div className="space-y-2">
+	              <h3 className="text-red-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Security (Zi)
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_security.map((item) => (
+	                  <ExtensionBlock
                     key={item.id}
                     data={item}
                     searchQuery={searchQuery}
@@ -1270,38 +1388,70 @@ const RISCVExplorer = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="text-slate-400 text-xs font-bold uppercase flex items-center gap-2">
-                Cryptography (Zk/Zvk)
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {extensions.z_crypto.map((item) => (
-                  <ExtensionBlock
+	            <div className="space-y-2">
+	              <h3 className="text-slate-400 text-xs font-bold uppercase flex items-center gap-2">
+	                Cryptography (Zk)
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_crypto.map((item) => (
+	                  <ExtensionBlock
                     key={item.id}
                     data={item}
                     searchQuery={searchQuery}
                     colorClass="bg-slate-800 border-slate-600 text-slate-300"
                   />
                 ))}
-              </div>
-            </div>
+	              </div>
+	            </div>
 
-            <div className="space-y-2">
-              <h3 className="text-orange-400 text-xs font-bold uppercase flex items-center gap-2">
-                System & Caches (Zic)
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {extensions.z_system.map((item) => (
-                  <ExtensionBlock
-                    key={item.id}
-                    data={item}
-                    searchQuery={searchQuery}
-                    colorClass="bg-orange-950/50 border-orange-800/50 text-orange-100"
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+	            <div className="space-y-2">
+	              <h3 className="text-violet-300 text-xs font-bold uppercase flex items-center gap-2">
+	                Vector Cryptography (Zvk)
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_vector_crypto.map((item) => (
+	                  <ExtensionBlock
+	                    key={item.id}
+	                    data={item}
+	                    searchQuery={searchQuery}
+	                    colorClass="bg-violet-950/40 border-violet-800/40 text-violet-100"
+	                  />
+	                ))}
+	              </div>
+	            </div>
+
+	            <div className="space-y-2">
+	              <h3 className="text-orange-400 text-xs font-bold uppercase flex items-center gap-2">
+	                System
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_system.map((item) => (
+	                  <ExtensionBlock
+	                    key={item.id}
+	                    data={item}
+	                    searchQuery={searchQuery}
+	                    colorClass="bg-orange-950/50 border-orange-800/50 text-orange-100"
+	                  />
+	                ))}
+	              </div>
+	            </div>
+
+	            <div className="space-y-2">
+	              <h3 className="text-orange-200 text-xs font-bold uppercase flex items-center gap-2">
+	                Caches
+	              </h3>
+	              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_caches.map((item) => (
+	                  <ExtensionBlock
+	                    key={item.id}
+	                    data={item}
+	                    searchQuery={searchQuery}
+	                    colorClass="bg-orange-950/30 border-orange-700/30 text-orange-100"
+	                  />
+	                ))}
+	              </div>
+	            </div>
+	          </div>
 
           {/* 4. S-Extensions (Privileged) */}
           <div className="col-span-full pt-4 border-t border-slate-800">
@@ -1354,23 +1504,30 @@ const RISCVExplorer = () => {
           </div>
         </div>
 
-        {/* Sidebar Info Panel */}
-        <div className="lg:col-span-3 mt-6 lg:mt-0">
-          <div className="sticky top-6 bg-slate-900/80 border border-slate-800 backdrop-blur-sm rounded-xl p-4 shadow-2xl min-h-[400px]">
-            <h2 className="text-sm font-bold text-slate-400 mb-4 flex items-center gap-2 uppercase tracking-wide">
-              <Info size={16} /> Selected Details
-            </h2>
+	        {/* Sidebar Info Panel */}
+	        <div className="lg:col-span-3 mt-6 lg:mt-0">
+	          <div className="sticky top-6 bg-slate-900/80 border border-slate-800 backdrop-blur-sm rounded-xl shadow-2xl min-h-[400px] max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
+	            <div className="p-4 pb-3 border-b border-slate-800/60">
+	              <h2 className="text-sm font-bold text-slate-400 flex items-center gap-2 uppercase tracking-wide">
+	                <Info size={16} /> Selected Details
+	              </h2>
+	            </div>
 
-            {selectedExt ? (
-              <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="mb-6 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-3xl font-black text-white tracking-tight break-words">
-                      {selectedExt.name}
-                    </h3>
-                    <span className="inline-block mt-2 px-2 py-0.5 bg-slate-800 rounded text-[10px] text-slate-400 font-mono border border-slate-700">
-                      ID: {selectedExt.id}
-                    </span>
+	            <div className="flex-1 overflow-y-auto overscroll-contain p-4 pt-3">
+	              {selectedExt ? (
+	                <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+	                <div className="mb-6 flex items-start justify-between gap-3">
+	                  <div className="min-w-0">
+	                    <a
+	                      href={selectedExt.url || 'https://github.com/riscv/riscv-isa-manual'}
+	                      target="_blank"
+	                      rel="noreferrer"
+	                      className="inline-flex items-start gap-1 text-3xl font-black text-white tracking-tight break-words hover:text-purple-300"
+	                      title="Open reference link"
+	                    >
+	                      <span>{selectedExt.name}</span>
+	                      <ArrowUpRight size={18} className="mt-1 shrink-0 opacity-80" />
+	                    </a>
                   </div>
 
                   {selectedExt.discontinued === 1 && (
@@ -1623,21 +1780,22 @@ const RISCVExplorer = () => {
                           <div className="w-1.5 h-1.5 rounded-full bg-slate-600" />
                           Not required in {activeProfile}
                         </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="h-[300px] flex flex-col items-center justify-center text-slate-600 text-center space-y-4">
-                <LayoutGrid size={32} className="opacity-50" />
-                <p className="text-xs max-w-[150px]">
-                  Click any block on the left to view technical specifications and use cases.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+	                      )}
+	                    </div>
+	                  )}
+	                </div>
+	                </div>
+	              ) : (
+	                <div className="h-[300px] flex flex-col items-center justify-center text-slate-600 text-center space-y-4">
+	                  <LayoutGrid size={32} className="opacity-50" />
+	                  <p className="text-xs max-w-[150px]">
+	                    Click any block on the left to view technical specifications and use cases.
+	                  </p>
+	                </div>
+	              )}
+	            </div>
+	          </div>
+	        </div>
       </div>
     </div>
   );
