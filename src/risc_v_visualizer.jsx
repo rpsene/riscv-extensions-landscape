@@ -1,46 +1,67 @@
 import React, { useState } from 'react';
 import {
-  Layers,
-  Cpu,
-  Box,
-  Zap,
-  Lock,
-  Settings,
   LayoutGrid,
   Info,
   ArrowRight,
-  Shield,
-  Database,
-  Minimize,
-  Activity,
 } from 'lucide-react';
+import extensions from './riscv_extensions.json';
+
+const EncodingDiagram = ({ encoding }) => {
+  const normalized = String(encoding || '').replace(/\s+/g, '');
+  if (normalized.length !== 32) {
+    return (
+      <div className="font-mono text-[11px] text-slate-200 bg-slate-900/60 border border-slate-800 rounded px-2 py-1 break-all">
+        {encoding}
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="inline-grid grid-flow-col auto-cols-[18px] rounded border border-slate-800 bg-slate-950/40">
+        {normalized.split('').map((bit, i) => {
+          const isVar = bit === '-';
+          const isGroupEnd = (i + 1) % 4 === 0 && i !== 31;
+          const value = isVar ? 'x' : bit;
+          return (
+            <div
+              key={`${i}-${bit}`}
+              className={[
+                'h-7 flex items-center justify-center font-mono text-[11px]',
+                i === 0 ? 'rounded-l' : '',
+                i === 31 ? 'rounded-r' : '',
+                isVar
+                  ? 'bg-slate-900/50 text-purple-200'
+                  : 'bg-slate-800/30 text-slate-100',
+                isGroupEnd ? 'border-r-2 border-slate-700' : 'border-r border-slate-800',
+              ].join(' ')}
+              title={`bit ${31 - i}`}
+            >
+              {value}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] font-mono text-slate-500">
+        <span>31</span>
+        <span>0</span>
+      </div>
+    </div>
+  );
+};
 
 const RISCVExplorer = () => {
   const [activeProfile, setActiveProfile] = useState(null);
   const [selectedExt, setSelectedExt] = useState(null);
+  const [selectedInstruction, setSelectedInstruction] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Scroll to exact extension tile if searchQuery matches an extension id exactly
-  React.useEffect(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return;
-
-    // Find exact match among all extensions
-    const allExts = Object.values(extensions).flat();
-    const exact = allExts.find(ext => ext.id.toLowerCase() === q);
-
-    if (exact) {
-      // Scroll to the element
-      const el = document.getElementById(`ext-${exact.id}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }
-  }, [searchQuery]);
+  const [searchMatches, setSearchMatches] = useState(null);
+  const lastScrolledKeyRef = React.useRef(null);
 
   // ---------------------------------------------------------------------------
-  // Extension Catalog – covers all IDs from your master list (plus a few extras)
+  // Extension Catalog – loaded from `src/riscv_extensions.json`
   // ---------------------------------------------------------------------------
+  /*
   const extensions = {
     base: [
       { id: 'RV32I', name: 'RV32I', desc: 'Standard Integer Base (32-bit)', use: 'Microcontrollers, IoT' },
@@ -52,27 +73,20 @@ const RISCVExplorer = () => {
 
     // Single-letter + top-level “ISA environment” markers
     standard: [
-      { id: 'M', name: 'M', desc: 'Integer Multiply/Divide', use: 'Hardware multiplication and division' },
-      { id: 'A', name: 'A', desc: 'Atomics', use: 'LR/SC & AMO ops in hardware' },
-      { id: 'F', name: 'F', desc: 'Single-Precision Float (32-bit)', use: 'Basic floating-point workloads' },
-      { id: 'D', name: 'D', desc: 'Double-Precision Float (64-bit)', use: 'General-purpose FP, HPC' },
-      { id: 'Q', name: 'Q', desc: 'Quad-Precision Float (128-bit)', use: 'High-precision scientific math' },
-      { id: 'C', name: 'C', desc: 'Compressed', use: '16-bit instruction encodings' },
-      { id: 'V', name: 'V', desc: 'Vector (RVV)', use: 'Full RVV 1.0 vector ISA' },
-      { id: 'H', name: 'H', desc: 'Hypervisor', use: 'Virtualization / VMs' },
-      { id: 'B', name: 'B', desc: 'Bit-Manip Bundle', use: 'Aggregates Zba/Zbb/Zbc/Zbs' },
-
-      // Additional top-level markers from the registry
-      { id: 'K', name: 'K', desc: 'Crypto ISA Umbrella', use: 'Groups scalar & vector crypto (Zk*/Zvk*)' },
-      { id: 'N', name: 'N', desc: 'User-Level Interrupts', use: 'User-mode interrupt handling' },
-      { id: 'P', name: 'P', desc: 'Packed-SIMD', use: 'Packed SIMD / DSP-style operations' },
-      { id: 'S', name: 'S', desc: 'Supervisor ISA', use: 'Supervisor privilege level (Volume II)' },
-      { id: 'U', name: 'U', desc: 'User ISA', use: 'User privilege level (Volume II)' },
-
-      // Non-ISA but profile-visible tags
-      // { id: 'HTI', name: 'HTI', desc: 'Trace & Instrumentation', use: 'Hardware trace / instrumentation' },
-      // { id: 'RERI', name: 'RERI', desc: 'RAS Error Reporting', use: 'Reliability/availability error reporting' },
-      // { id: 'Semihosting', name: 'Semihosting', desc: 'Semihosting ABI', use: 'Host-assisted I/O for bare-metal' },
+      { id: 'A', name: 'A', desc: 'Atomics', use: 'LR/SC & AMO ops in hardware', discontinued: 0 },
+      { id: 'B', name: 'B', desc: 'Bit-Manip Bundle', use: 'Aggregates Zba/Zbb/Zbc/Zbs', discontinued: 0 },
+      { id: 'C', name: 'C', desc: 'Compressed', use: '16-bit instruction encodings', discontinued: 0 },
+      { id: 'D', name: 'D', desc: 'Double-Precision Float (64-bit)', use: 'General-purpose FP, HPC', discontinued: 0 },
+      { id: 'F', name: 'F', desc: 'Single-Precision Float (32-bit)', use: 'Basic floating-point workloads', discontinued: 0 },
+      { id: 'H', name: 'H', desc: 'Hypervisor', use: 'Virtualization / VMs', discontinued: 0 },
+      { id: 'K', name: 'K', desc: 'Crypto Umbrella (Scalar + Vector)', use: 'Top-level tag signaling bundled Zk* /Zvk* NIST & ShangMi crypto support', discontinued: 0 },
+      { id: 'M', name: 'M', desc: 'Integer Multiply/Divide', use: 'Hardware multiplication and division', discontinued: 0 },
+      { id: 'N', name: 'N', desc: 'User-Level Interrupts', use: 'User-mode interrupt handling', discontinued: 1 },
+      { id: 'P', name: 'P', desc: 'Packed-SIMD', use: 'Packed SIMD / DSP-style operations', discontinued: 0 },
+      { id: 'Q', name: 'Q', desc: 'Quad-Precision Float (128-bit)', use: 'High-precision scientific math', discontinued: 0 },
+      { id: 'S', name: 'S', desc: 'Supervisor ISA', use: 'Supervisor privilege level (Volume II)', discontinued: 0 },
+      { id: 'U', name: 'U', desc: 'User ISA', use: 'User privilege level (Volume II)', discontinued: 0 },
+      { id: 'V', name: 'V', desc: 'Vector (RVV)', use: 'Full RVV 1.0 vector ISA', discontinued: 0 },
     ],
 
     // Zb* scalar bit-manip
@@ -97,7 +111,7 @@ const RISCVExplorer = () => {
       { id: 'Zcmlsd', name: 'Zcmlsd', desc: 'Compressed Mem-Loop', use: 'Compact memcpy/memset-style sequences' },
     ],
 
-    // Zf*/Za* floating-point & atomics family
+    // Zf* /Za* floating-point & atomics family
     z_float: [
       { id: 'Zfh', name: 'Zfh', desc: 'Half-Precision FP (16-bit)', use: 'Low-precision FP (AI/graphics)' },
       { id: 'Zfhmin', name: 'Zfhmin', desc: 'Minimal Half-Precision FP', use: 'Conversions, no arithmetic' },
@@ -369,21 +383,12 @@ const RISCVExplorer = () => {
       { id: 'Smtdeleg', name: 'Smtdeleg', desc: 'Trap Delegation', use: 'Fine-grain trap delegation controls' },
       { id: 'Smvatag', name: 'Smvatag', desc: 'VA Tagging (M)', use: 'Machine-level virtual-address tagging' },
 
-      // Hypervisor augmentation cluster (Sha subcomponents)
-      { id: 'Sha', name: 'Sha', desc: 'Augmented Hypervisor', use: 'Profile-defined hypervisor bundle' },
-      { id: 'Shcounterenw', name: 'Shcounterenw', desc: 'HPM Counter Enable (H)', use: 'Writable bits in hcounteren' },
-      { id: 'Shtvala', name: 'Shtvala', desc: 'htval Guest Address', use: 'htval contains guest physical address' },
-      { id: 'Shvstvala', name: 'Shvstvala', desc: 'vstval Address Rule', use: 'VS stval updated like stval' },
-      { id: 'Shvstvecd', name: 'Shvstvecd', desc: 'vstvec Direct', use: 'Direct-mode VS trap vectors' },
-      { id: 'Shvsatpa', name: 'Shvsatpa', desc: 'vsatp Modes', use: 'VS translation modes match satp modes' },
-      { id: 'Shgatpa', name: 'Shgatpa', desc: 'HGATP Modes', use: 'HGATP SvNNx4 modes required' },
-      { id: 'Shlcofideleg', name: 'Shlcofideleg', desc: 'LC/OFI Delegation', use: 'Delegation of load-check / fault types' },
-
       // Non-ISA “spec tags” modeled as tiles too
       { id: 'RERI', name: 'RERI', desc: 'RAS Error Reporting', use: 'RAS error reporting arch tag' },
       { id: 'HTI', name: 'HTI', desc: 'Trace & Instrumentation', use: 'Trace / instrumentation spec tag' },
     ],
   };
+  */
 
   // ---------------------------------------------------------------------------
   // Profile Definitions – mandatory sets (U64+S64) for RVA20/22/23/RVB23
@@ -568,6 +573,401 @@ const RISCVExplorer = () => {
     ],
   };
 
+  // ---------------------------------------------------------------------------
+  // Instruction lists per extension (used in the details sidebar)
+  // ---------------------------------------------------------------------------
+  const extensionInstructions = {
+    RV32I: [
+      'LUI', 'AUIPC',
+      'JAL', 'JALR',
+      'BEQ', 'BNE', 'BLT', 'BGE', 'BLTU', 'BGEU',
+      'LB', 'LH', 'LW', 'LBU', 'LHU',
+      'SB', 'SH', 'SW',
+      'ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI',
+      'SLLI', 'SRLI', 'SRAI',
+      'ADD', 'SUB', 'SLL', 'SLT', 'SLTU', 'XOR', 'SRL', 'SRA', 'OR', 'AND',
+      'FENCE', 'FENCE.I',
+      'ECALL', 'EBREAK',
+      'CSRRW', 'CSRRS', 'CSRRC', 'CSRRWI', 'CSRRSI', 'CSRRCI',
+    ],
+    RV32E: [
+      'LUI', 'AUIPC',
+      'JAL', 'JALR',
+      'BEQ', 'BNE', 'BLT', 'BGE', 'BLTU', 'BGEU',
+      'LB', 'LH', 'LW', 'LBU', 'LHU',
+      'SB', 'SH', 'SW',
+      'ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI',
+      'SLLI', 'SRLI', 'SRAI',
+      'ADD', 'SUB', 'SLL', 'SLT', 'SLTU', 'XOR', 'SRL', 'SRA', 'OR', 'AND',
+      'FENCE', 'FENCE.I',
+      'ECALL', 'EBREAK',
+      'CSRRW', 'CSRRS', 'CSRRC', 'CSRRWI', 'CSRRSI', 'CSRRCI',
+    ],
+    RV64I: [
+      'LUI', 'AUIPC',
+      'JAL', 'JALR',
+      'BEQ', 'BNE', 'BLT', 'BGE', 'BLTU', 'BGEU',
+      'LB', 'LH', 'LW', 'LBU', 'LHU', 'LWU', 'LD',
+      'SB', 'SH', 'SW', 'SD',
+      'ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI',
+      'SLLI', 'SRLI', 'SRAI',
+      'ADD', 'SUB', 'SLL', 'SLT', 'SLTU', 'XOR', 'SRL', 'SRA', 'OR', 'AND',
+      'ADDIW', 'SLLIW', 'SRLIW', 'SRAIW',
+      'ADDW', 'SUBW', 'SLLW', 'SRLW', 'SRAW',
+      'FENCE', 'FENCE.I',
+      'ECALL', 'EBREAK',
+      'CSRRW', 'CSRRS', 'CSRRC', 'CSRRWI', 'CSRRSI', 'CSRRCI',
+    ],
+    RV64E: [
+      'LUI', 'AUIPC',
+      'JAL', 'JALR',
+      'BEQ', 'BNE', 'BLT', 'BGE', 'BLTU', 'BGEU',
+      'LB', 'LH', 'LW', 'LBU', 'LHU', 'LWU', 'LD',
+      'SB', 'SH', 'SW', 'SD',
+      'ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI',
+      'SLLI', 'SRLI', 'SRAI',
+      'ADD', 'SUB', 'SLL', 'SLT', 'SLTU', 'XOR', 'SRL', 'SRA', 'OR', 'AND',
+      'ADDIW', 'SLLIW', 'SRLIW', 'SRAIW',
+      'ADDW', 'SUBW', 'SLLW', 'SRLW', 'SRAW',
+      'FENCE', 'FENCE.I',
+      'ECALL', 'EBREAK',
+      'CSRRW', 'CSRRS', 'CSRRC', 'CSRRWI', 'CSRRSI', 'CSRRCI',
+    ],
+    RV128I: [
+      'LUI', 'AUIPC',
+      'JAL', 'JALR',
+      'BEQ', 'BNE', 'BLT', 'BGE', 'BLTU', 'BGEU',
+      'LB', 'LH', 'LW', 'LBU', 'LHU', 'LWU', 'LD',
+      'SB', 'SH', 'SW', 'SD',
+      'ADDI', 'SLTI', 'SLTIU', 'XORI', 'ORI', 'ANDI',
+      'SLLI', 'SRLI', 'SRAI',
+      'ADD', 'SUB', 'SLL', 'SLT', 'SLTU', 'XOR', 'SRL', 'SRA', 'OR', 'AND',
+      'ADDIW', 'SLLIW', 'SRLIW', 'SRAIW',
+      'ADDW', 'SUBW', 'SLLW', 'SRLW', 'SRAW',
+      'FENCE', 'FENCE.I',
+      'ECALL', 'EBREAK',
+      'CSRRW', 'CSRRS', 'CSRRC', 'CSRRWI', 'CSRRSI', 'CSRRCI',
+    ],
+    M: [
+      'MUL', 'MULH', 'MULHSU', 'MULHU',
+      'DIV', 'DIVU', 'REM', 'REMU',
+    ],
+    A: [
+      'LR.W', 'SC.W',
+      'AMOSWAP.W', 'AMOADD.W', 'AMOXOR.W', 'AMOOR.W', 'AMOAND.W',
+      'AMOMIN.W', 'AMOMAX.W', 'AMOMINU.W', 'AMOMAXU.W',
+    ],
+    F: [
+      'FLW', 'FSW',
+      'FMADD.S', 'FMSUB.S', 'FNMSUB.S', 'FNMADD.S',
+      'FADD.S', 'FSUB.S', 'FMUL.S', 'FDIV.S',
+      'FSQRT.S',
+      'FSGNJ.S', 'FSGNJN.S', 'FSGNJX.S',
+      'FMIN.S', 'FMAX.S',
+      'FLE.S', 'FLT.S', 'FEQ.S',
+      'FCVT.W.S', 'FCVT.WU.S',
+      'FCVT.S.W', 'FCVT.S.WU',
+      'FMV.X.W', 'FMV.W.X',
+      'FCLASS.S',
+    ],
+    D: [
+      'FLD', 'FSD',
+
+      'FMADD.D', 'FMSUB.D', 'FNMSUB.D', 'FNMADD.D',
+
+      'FADD.D', 'FSUB.D', 'FMUL.D', 'FDIV.D',
+      'FSQRT.D',
+
+      'FSGNJ.D', 'FSGNJN.D', 'FSGNJX.D',
+      'FMIN.D', 'FMAX.D',
+
+      'FLE.D', 'FLT.D', 'FEQ.D',
+
+      'FCVT.W.D', 'FCVT.WU.D',
+      'FCVT.D.W', 'FCVT.D.WU',
+
+      'FCVT.S.D', 'FCVT.D.S',
+
+      'FMV.X.D', 'FMV.D.X',
+      'FCLASS.D',
+    ],
+    Q: [
+      'FLQ', 'FSQ',
+
+      'FMADD.Q', 'FMSUB.Q', 'FNMSUB.Q', 'FNMADD.Q',
+
+      'FADD.Q', 'FSUB.Q', 'FMUL.Q', 'FDIV.Q',
+      'FSQRT.Q',
+
+      'FSGNJ.Q', 'FSGNJN.Q', 'FSGNJX.Q',
+      'FMIN.Q', 'FMAX.Q',
+
+      'FLE.Q', 'FLT.Q', 'FEQ.Q',
+
+      'FCVT.W.Q', 'FCVT.WU.Q',
+      'FCVT.Q.W', 'FCVT.Q.WU',
+
+      'FCVT.L.Q', 'FCVT.LU.Q',
+      'FCVT.Q.L', 'FCVT.Q.LU',
+
+      'FCVT.S.Q', 'FCVT.Q.S',
+      'FCVT.D.Q', 'FCVT.Q.D',
+
+      'FMV.X.Q', 'FMV.Q.X',
+      'FCLASS.Q',
+    ],
+    C: [
+      // Integer compressed
+      'C.ADDI4SPN',
+      'C.LW', 'C.SW',
+      'C.NOP', 'C.ADDI',
+      'C.JAL', 'C.LI',
+      'C.ADDI16SP', 'C.LUI',
+      'C.SRLI', 'C.SRAI', 'C.ANDI',
+      'C.SUB', 'C.XOR', 'C.OR', 'C.AND',
+      'C.J', 'C.BEQZ', 'C.BNEZ',
+      'C.SLLI',
+      'C.LWSP', 'C.SWSP',
+      'C.JR', 'C.MV', 'C.EBREAK', 'C.JALR',
+      // FP compressed (when F/D present)
+      'C.FLW', 'C.FSW',
+      'C.FLWSP', 'C.FSWSP',
+      'C.FLD', 'C.FSD',
+      'C.FLDSP', 'C.FSDSP',
+    ],
+    B: [
+      // Aggregated representative subset from Zba/Zbb/Zbc/Zbs
+      // Address-generation helpers (Zba-style)
+      'SH1ADD', 'SH2ADD', 'SH3ADD',
+      'ADD.UW', 'SLLI.UW',
+
+      // Logical / arithmetic bit-manip (Zbb-style)
+      'ANDN', 'ORN', 'XNOR',
+      'SLO', 'SLOI',
+      'SRO', 'SROI',
+      'ROL', 'ROR', 'RORI',
+      'CLZ', 'CTZ', 'CPOP',
+      'MIN', 'MINU', 'MAX', 'MAXU',
+      'SEXT.B', 'SEXT.H', 'ZEXT.H',
+
+      // Carry-less multiply (Zbc-style)
+      'CLMUL', 'CLMULH', 'CLMULR',
+
+      // Single-bit set/clear/invert/extract (Zbs-style)
+      'BSET', 'BSETI',
+      'BCLR', 'BCLRI',
+      'BINV', 'BINVI',
+      'BEXT', 'BEXTI',
+    ],
+    Zba: [
+      // Address-generation helpers (Zba-style)
+      'SH1ADD', 'SH2ADD', 'SH3ADD',
+      'ADD.UW', 'SLLI.UW',
+    ],
+    Zbb: [
+      // Logical / arithmetic bit-manip (Zbb-style)
+      'ANDN', 'ORN', 'XNOR',
+      'SLO', 'SLOI',
+      'SRO', 'SROI',
+      'ROL', 'ROR', 'RORI',
+      'CLZ', 'CTZ', 'CPOP',
+      'MIN', 'MINU', 'MAX', 'MAXU',
+      'SEXT.B', 'SEXT.H', 'ZEXT.H',
+    ],
+    Zbc: [
+      // Carry-less multiply (Zbc-style)
+      'CLMUL', 'CLMULH', 'CLMULR',
+    ],
+    Zbs: [
+      // Single-bit set/clear/invert/extract (Zbs-style)
+      'BSET', 'BSETI',
+      'BCLR', 'BCLRI',
+      'BINV', 'BINVI',
+      'BEXT', 'BEXTI',
+    ],
+    Zba: [
+      // Address-generation helpers specific to Zba
+      'SH1ADD', 'SH2ADD', 'SH3ADD',
+      'ADD.UW', 'SLLI.UW',
+    ],
+    V: [
+      // Configuration
+      'VSETVL', 'VSETVLI',
+
+      // Integer vector ALU (representative subset)
+      'VADD.VV', 'VADD.VX', 'VSUB.VV', 'VSUB.VX',
+      'VAND.VV', 'VAND.VX', 'VOR.VV', 'VOR.VX', 'VXOR.VV', 'VXOR.VX',
+      'VMUL.VV', 'VMUL.VX',
+
+      // Loads / stores (strided / unit)
+      'VLE8.V', 'VLE16.V', 'VLE32.V', 'VLE64.V',
+      'VSE8.V', 'VSE16.V', 'VSE32.V', 'VSE64.V',
+      'VLSE32.V', 'VSSE32.V',
+
+      // Comparisons & masks
+      'VMSEQ.VV', 'VMSEQ.VX', 'VMSNE.VV', 'VMSNE.VX',
+      'VMSLTU.VV', 'VMSLTU.VX', 'VMSLT.VV', 'VMSLT.VX',
+      'VMSLEU.VV', 'VMSLEU.VX', 'VMSLE.VV', 'VMSLE.VX',
+
+      // Reductions & dot products (representative)
+      'VREDSUM.VS',
+      'VMACC.VV', 'VMACC.VX',
+
+      // FP vector helpers
+      'VFMV.V.F', 'VFMV.F.S',
+      'VFMACC.VV', 'VFMACC.VF',
+
+      // Data movement / slides
+      'VSLIDEUP.VI', 'VSLIDEDOWN.VI',
+      'VCOMPRESS.VM',
+    ],
+    H: [
+      // Hypervisor control & fences
+      'HFENCE.VVMA', 'HFENCE.GVMA',
+      'HINVAL.VVMA', 'HINVAL.GVMA',
+
+      // Hypervisor guest memory access loads
+      'HLV.B', 'HLV.BU',
+      'HLV.H', 'HLV.HU',
+      'HLV.W', 'HLV.WU',
+      'HLV.D',
+
+      // Hypervisor guest memory access stores
+      'HSV.B',
+      'HSV.H',
+      'HSV.W',
+      'HSV.D',
+
+      // Hypervisor execute-from-guest helpers
+      'HLVX.HU', 'HLVX.WU',
+
+      // Hypervisor return
+      'HRET',
+    ],
+
+    K: [
+      // AES round / mixcolumn (representative NIST scalar crypto ops)
+      'AES32ESMI', 'AES32ESI',
+      'AES32DSMI', 'AES32DSI',
+      'AES64ES', 'AES64ESM',
+      'AES64DS', 'AES64DSM',
+      'AES64IM',
+
+      // SHA-2 helpers (scalar)
+      'SHA256SIG0', 'SHA256SIG1',
+      'SHA256SUM0', 'SHA256SUM1',
+      'SHA512SIG0', 'SHA512SIG1',
+      'SHA512SUM0', 'SHA512SUM1',
+
+      // Entropy / random source (representative)
+      'CSRRAND', 'CSRRAND64',
+    ],
+    S: [
+      // Supervisor return and fences
+      'SRET',
+      'SFENCE.VMA',
+      'WFI',
+
+      // Core supervisor CSRs (accessed via CSR* ops)
+      'SSTATUS',
+      'SIE', 'SIP',
+      'STVEC',
+      'SSCRATCH',
+      'SEPC',
+      'SCAUSE',
+      'STVAL',
+
+      // Address-translation control
+      'SATP',
+    ],
+    U: [
+      // User-level environment instructions (Volume II)
+      // Note: U-mode mostly reuses unprivileged ISA, so only traps/syscalls are distinct
+      'URET',
+      'ECALL',
+      'EBREAK',
+
+      // User-level CSRs (accessed via CSR* ops)
+      'USTATUS',
+      'UIE', 'UIP',
+      'UTVEC',
+      'USCRATCH',
+      'UEPC',
+      'UCAUSE',
+      'UTVAL',
+    ],
+  };
+
+  // ---------------------------------------------------------------------------
+  // Derived helpers
+  // ---------------------------------------------------------------------------
+  const instructionMatchesQuery = (mnemonic, details, q) => {
+    const needle = String(q || '').trim().toLowerCase();
+    if (!needle) return false;
+
+    if (mnemonic && String(mnemonic).toLowerCase().includes(needle)) return true;
+    if (!details || typeof details !== 'object') return false;
+
+    for (const field of [details.encoding, details.match, details.mask]) {
+      if (field && String(field).toLowerCase().includes(needle)) return true;
+    }
+    for (const list of [details.variable_fields, details.extension]) {
+      if (Array.isArray(list) && list.join(' ').toLowerCase().includes(needle)) return true;
+    }
+
+    return false;
+  };
+
+  const selectInstructionByMnemonic = React.useCallback((ext, mnemonic) => {
+    const details = ext?.instructions?.[mnemonic];
+    setSelectedInstruction(details ? { mnemonic, ...details } : null);
+  }, []);
+
+  const extensionSearchIndexById = React.useMemo(() => {
+    const index = new Map();
+    const allExts = Object.values(extensions).flat().filter(Boolean);
+
+    for (const ext of allExts) {
+      const parts = [];
+
+      for (const field of [ext.id, ext.name, ext.desc, ext.use]) {
+        if (field) parts.push(String(field));
+      }
+
+      const mnemonicList = extensionInstructions[ext.id];
+      if (Array.isArray(mnemonicList) && mnemonicList.length) {
+        parts.push(mnemonicList.join(' '));
+      }
+
+      const instructions = ext.instructions;
+      if (instructions && typeof instructions === 'object') {
+        for (const [mnemonic, details] of Object.entries(instructions)) {
+          parts.push(mnemonic);
+
+          if (!details || typeof details !== 'object') {
+            if (details != null) parts.push(String(details));
+            continue;
+          }
+
+          if (details.encoding) parts.push(String(details.encoding));
+          if (details.match) parts.push(String(details.match));
+          if (details.mask) parts.push(String(details.mask));
+
+          if (Array.isArray(details.variable_fields)) {
+            parts.push(details.variable_fields.join(' '));
+          }
+          if (Array.isArray(details.extension)) {
+            parts.push(details.extension.join(' '));
+          }
+        }
+      }
+
+      index.set(ext.id, parts.join(' ').toLowerCase());
+    }
+
+    return index;
+  }, []);
+
   const isHighlighted = (id) => {
     if (!activeProfile) return false;
     return profiles[activeProfile].includes(id);
@@ -580,26 +980,31 @@ const RISCVExplorer = () => {
 
   const ExtensionBlock = ({ data, colorClass, searchQuery }) => {
     const q = searchQuery.trim().toLowerCase();
-    const matchesSearch = q.length
-      ? [data.id, data.name, data.desc].some((field) =>
-          field.toLowerCase().includes(q)
-        )
-      : false;
+    const searchIndex = extensionSearchIndexById.get(data.id) || '';
+    const matchesSearch = q.length ? searchIndex.includes(q) : false;
+
+    const isDiscontinued = data.discontinued === 1;
 
     const isSelected = selectedExt?.id === data.id;
     const highlighted = isHighlighted(data.id) || matchesSearch || isSelected;
+    const baseColor = isDiscontinued
+      ? 'bg-slate-700 border-slate-500 text-slate-200'
+      : colorClass;
 
-    return (
-      <div
-        id={`ext-${data.id}`}
-        onClick={() =>
-          setSelectedExt((current) =>
-            current?.id === data.id ? null : data
-          )
-        }
-        className={`
-          relative p-2 rounded border cursor-pointer transition-all duration-200
-          ${
+	    return (
+	      <div
+	        id={`ext-${data.id}`}
+	        onClick={() =>
+	          setSelectedExt((current) => {
+	            const next = current?.id === data.id ? null : data;
+	            setSelectedInstruction(null);
+	            setSearchMatches(null);
+	            return next;
+	          })
+	        }
+	        className={`
+	          relative p-2 rounded border cursor-pointer transition-all duration-200
+	          ${
             highlighted
               ? 'ring-2 ring-yellow-400 bg-slate-800 scale-105 shadow-lg shadow-yellow-900/20'
               : ''
@@ -607,7 +1012,7 @@ const RISCVExplorer = () => {
           ${
             isDimmed(data.id) && !matchesSearch && !isSelected
               ? 'opacity-20 grayscale'
-              : `${colorClass} hover:brightness-110`
+              : `${baseColor} hover:brightness-110`
           }
           ${isSelected ? 'z-20 shadow-xl shadow-yellow-900/40' : 'z-10'}
         `}
@@ -621,6 +1026,79 @@ const RISCVExplorer = () => {
       </div>
     );
   };
+
+  // Scroll to extension tile when search matches an extension ID or instruction mnemonic,
+  // and automatically open the Selected Details panel. Use a ref to avoid re-scrolling
+  // on every render while the query stays the same.
+	  React.useEffect(() => {
+	    const q = searchQuery.trim().toLowerCase();
+
+	    if (!q) {
+	      // Reset tracking when query is cleared
+	      lastScrolledKeyRef.current = null;
+	      setSearchMatches(null);
+	      return;
+	    }
+
+	    const allExts = Object.values(extensions).flat();
+	    let matchedMnemonic = null;
+	    let matchedDetails = null;
+
+	    // First, try an exact extension ID match
+	    let targetExt = allExts.find((ext) => ext.id.toLowerCase() === q);
+
+	    // If no exact extension ID match, try to match an instruction mnemonic
+	    if (!targetExt) {
+	      const matchEntry = Object.entries(extensionInstructions).find(([, mnemonics]) =>
+	        mnemonics.some((m) => m.toLowerCase() === q)
+	      );
+
+	      if (matchEntry) {
+	        const [extId, mnemonics] = matchEntry;
+	        targetExt = allExts.find((ext) => ext.id === extId) || null;
+	        matchedMnemonic = mnemonics.find((m) => m.toLowerCase() === q) || null;
+	        matchedDetails = targetExt?.instructions?.[matchedMnemonic] || null;
+	      }
+	    }
+
+	    // If still no match, try a deep search against indexed extension+instruction details
+	    if (!targetExt) {
+	      targetExt =
+	        allExts.find((ext) => (extensionSearchIndexById.get(ext.id) || '').includes(q)) ||
+	        null;
+	    }
+
+	    if (targetExt) {
+	      const hits = [];
+	      if (targetExt.instructions && typeof targetExt.instructions === 'object') {
+	        for (const [mnemonic, details] of Object.entries(targetExt.instructions)) {
+	          if (instructionMatchesQuery(mnemonic, details, q)) {
+	            hits.push(mnemonic);
+	          }
+	        }
+	      }
+
+	      if (matchedMnemonic && !hits.includes(matchedMnemonic)) hits.unshift(matchedMnemonic);
+	      if (!matchedMnemonic && hits.length) matchedMnemonic = hits[0];
+	      matchedDetails = matchedMnemonic ? targetExt?.instructions?.[matchedMnemonic] : null;
+
+	      // Always open/update the Selected Details panel for the matched extension
+	      setSelectedExt(targetExt);
+	      setSearchMatches(hits.length ? { extId: targetExt.id, query: q, mnemonics: hits, index: 0 } : null);
+	      setSelectedInstruction(matchedMnemonic && matchedDetails ? { mnemonic: matchedMnemonic, ...matchedDetails } : null);
+
+	      const key = `${targetExt.id}:${q}`;
+
+	      // Only auto-scroll once per unique (extension, query) pair
+	      if (lastScrolledKeyRef.current !== key) {
+        const el = document.getElementById(`ext-${targetExt.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+	        lastScrolledKeyRef.current = key;
+	      }
+	    }
+	  }, [searchQuery, extensionSearchIndexById]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-2 md:p-6 font-sans">
@@ -661,15 +1139,15 @@ const RISCVExplorer = () => {
         {/* Main Grid */}
         <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min">
           {/* Search Bar – centered, before Base Architectures */}
-          <div className="col-span-full flex justify-center mb-2">
-            <div className="w-full max-w-md">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search extensions by ID, name, or description..."
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
-              />
+	          <div className="col-span-full flex justify-center mb-3 -mt-1">
+	            <div className="w-full max-w-lg">
+	              <input
+	                type="text"
+	                value={searchQuery}
+	                onChange={(e) => setSearchQuery(e.target.value)}
+	                placeholder="Search extensions by ID, name, or description..."
+	                className="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-yellow-200/30 text-sm text-slate-100 placeholder-slate-500 shadow-sm shadow-yellow-900/10 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	              />
               <p className="mt-1 text-[10px] text-center text-slate-500">
                 Typing here will highlight matching tiles in yellow (case-insensitive).
               </p>
@@ -885,13 +1363,21 @@ const RISCVExplorer = () => {
 
             {selectedExt ? (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="mb-6">
-                  <h3 className="text-3xl font-black text-white tracking-tight break-words">
-                    {selectedExt.name}
-                  </h3>
-                  <span className="inline-block mt-2 px-2 py-0.5 bg-slate-800 rounded text-[10px] text-slate-400 font-mono border border-slate-700">
-                    ID: {selectedExt.id}
-                  </span>
+                <div className="mb-6 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-3xl font-black text-white tracking-tight break-words">
+                      {selectedExt.name}
+                    </h3>
+                    <span className="inline-block mt-2 px-2 py-0.5 bg-slate-800 rounded text-[10px] text-slate-400 font-mono border border-slate-700">
+                      ID: {selectedExt.id}
+                    </span>
+                  </div>
+
+                  {selectedExt.discontinued === 1 && (
+                    <span className="shrink-0 px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-wide border bg-red-950/40 text-red-200 border-red-600/60">
+                      Discontinued
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-6">
@@ -908,6 +1394,213 @@ const RISCVExplorer = () => {
                     </h4>
                     <p className="text-slate-400 text-sm italic">{selectedExt.use}</p>
                   </div>
+
+	                  {/* Instruction list, when available */}
+	                  {searchMatches &&
+	                    searchMatches.extId === selectedExt.id &&
+	                    searchMatches.query === searchQuery.trim().toLowerCase() &&
+	                    searchMatches.mnemonics.length > 0 && (
+	                      <div className="bg-slate-950 p-3 rounded border border-slate-800">
+	                        <div className="flex items-center justify-between gap-3">
+	                          <div className="min-w-0">
+	                            <div className="text-[10px] uppercase tracking-wider text-yellow-300 font-bold mb-0.5">
+	                              Search Hits ({searchMatches.mnemonics.length})
+	                            </div>
+	                            <div className="text-[11px] font-mono text-slate-200 truncate">
+	                              {searchMatches.mnemonics[searchMatches.index] || ''}
+	                              <span className="ml-2 text-slate-500">
+	                                ({searchMatches.index + 1}/{searchMatches.mnemonics.length})
+	                              </span>
+	                            </div>
+	                          </div>
+
+	                          <div className="flex items-center gap-2 shrink-0">
+	                            <button
+	                              type="button"
+	                              className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-200 disabled:opacity-40"
+	                              onClick={() => {
+	                                setSearchMatches((current) => {
+	                                  if (!current || current.extId !== selectedExt.id) return current;
+	                                  const nextIndex =
+	                                    (current.index - 1 + current.mnemonics.length) % current.mnemonics.length;
+	                                  const mnemonic = current.mnemonics[nextIndex];
+	                                  selectInstructionByMnemonic(selectedExt, mnemonic);
+	                                  return { ...current, index: nextIndex };
+	                                });
+	                              }}
+	                              disabled={searchMatches.mnemonics.length < 2}
+	                            >
+	                              Prev
+	                            </button>
+	                            <button
+	                              type="button"
+	                              className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-200 disabled:opacity-40"
+	                              onClick={() => {
+	                                setSearchMatches((current) => {
+	                                  if (!current || current.extId !== selectedExt.id) return current;
+	                                  const nextIndex = (current.index + 1) % current.mnemonics.length;
+	                                  const mnemonic = current.mnemonics[nextIndex];
+	                                  selectInstructionByMnemonic(selectedExt, mnemonic);
+	                                  return { ...current, index: nextIndex };
+	                                });
+	                              }}
+	                              disabled={searchMatches.mnemonics.length < 2}
+	                            >
+	                              Next
+	                            </button>
+	                          </div>
+	                        </div>
+	                      </div>
+	                    )}
+
+	                  {extensionInstructions[selectedExt.id] && (
+	                    <div className="bg-slate-950 p-3 rounded border border-slate-800">
+	                      <h4 className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold mb-2">
+	                        Instruction Set Snapshot ({extensionInstructions[selectedExt.id].length})
+	                      </h4>
+	                      <div className="flex flex-wrap gap-1">
+		                        {extensionInstructions[selectedExt.id].map((mnemonic) => {
+		                          const q = searchQuery.trim().toLowerCase();
+		                          const instructionDetails = selectedExt.instructions?.[mnemonic];
+		                          const isHit =
+		                            q.length &&
+		                            (mnemonic.toLowerCase().includes(q) ||
+		                              instructionMatchesQuery(mnemonic, instructionDetails, q));
+		                          const isActive = selectedInstruction?.mnemonic === mnemonic;
+		                          const isClickable = Boolean(instructionDetails);
+		                          return (
+	                            <button
+	                              key={mnemonic}
+	                              type="button"
+		                              onClick={() => {
+		                                if (!isClickable) return;
+		                                setSelectedInstruction(
+		                                  isActive ? null : { mnemonic, ...instructionDetails }
+		                                );
+		                                setSearchMatches((current) => {
+		                                  if (
+		                                    !current ||
+		                                    current.extId !== selectedExt.id ||
+		                                    current.query !== searchQuery.trim().toLowerCase()
+		                                  ) {
+		                                    return current;
+		                                  }
+		                                  const idx = current.mnemonics.indexOf(mnemonic);
+		                                  if (idx === -1) return current;
+		                                  return { ...current, index: idx };
+		                                });
+		                              }}
+	                              className={`px-1.5 py-0.5 rounded border text-[10px] font-mono tracking-tight ${
+	                                isActive
+	                                  ? 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
+	                                  : isHit
+	                                      ? 'border-yellow-400 bg-yellow-500/10 text-yellow-200'
+	                                      : 'border-slate-700 bg-slate-800/70'
+	                              }`}
+	                              title={
+	                                isClickable
+	                                  ? `View details for ${mnemonic}`
+	                                  : `${mnemonic} (no details yet)`
+	                              }
+	                              disabled={!isClickable}
+	                            >
+	                              {mnemonic}
+	                            </button>
+	                          );
+	                        })}
+	                      </div>
+	                    </div>
+	                  )}
+
+	                  {selectedInstruction && (
+	                    <div className="bg-slate-950 p-3 rounded border border-slate-800">
+	                      <div className="flex items-start justify-between gap-3 mb-2">
+	                        <h4 className="text-[10px] uppercase tracking-wider text-purple-300 font-bold flex items-center gap-1">
+	                          <ArrowRight size={10} /> Instruction Details
+	                        </h4>
+	                        <button
+	                          type="button"
+	                          className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
+	                          onClick={() => setSelectedInstruction(null)}
+	                        >
+	                          Close
+	                        </button>
+	                      </div>
+
+	                      <div className="mb-3">
+	                        <div className="text-white font-black tracking-tight text-xl">
+	                          {selectedInstruction.mnemonic}
+	                        </div>
+	                      </div>
+
+	                      <div className="space-y-3">
+	                        <div>
+	                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+	                            Encoding
+	                          </div>
+	                          <EncodingDiagram encoding={selectedInstruction.encoding} />
+	                          <div className="mt-1 text-[10px] text-slate-500">
+	                            Fixed bits are <span className="font-mono">0/1</span>, variable bits are{' '}
+	                            <span className="font-mono">x</span>.
+	                          </div>
+	                        </div>
+
+	                        <div>
+	                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+	                            Variable Fields
+	                          </div>
+	                          <div className="flex flex-wrap gap-1">
+	                            {(selectedInstruction.variable_fields || []).map((field) => (
+	                              <span
+	                                key={field}
+	                                className="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800/70 text-[10px] font-mono text-slate-200"
+	                              >
+	                                {field}
+	                              </span>
+	                            ))}
+	                          </div>
+	                        </div>
+
+		                        <div className="grid grid-cols-2 gap-2">
+		                          <div>
+		                            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+		                              Match
+		                            </div>
+		                            <div
+		                              className={`font-mono text-[11px] text-slate-200 bg-slate-900/60 border rounded px-2 py-1 ${
+		                                searchQuery.trim().length &&
+		                                String(selectedInstruction.match || '')
+		                                  .toLowerCase()
+		                                  .includes(searchQuery.trim().toLowerCase())
+		                                  ? 'border-yellow-400 bg-yellow-500/10'
+		                                  : 'border-slate-800'
+		                              }`}
+		                            >
+		                              {selectedInstruction.match}
+		                            </div>
+		                          </div>
+		                          <div>
+		                            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+		                              Mask
+		                            </div>
+		                            <div
+		                              className={`font-mono text-[11px] text-slate-200 bg-slate-900/60 border rounded px-2 py-1 ${
+		                                searchQuery.trim().length &&
+		                                String(selectedInstruction.mask || '')
+		                                  .toLowerCase()
+		                                  .includes(searchQuery.trim().toLowerCase())
+		                                  ? 'border-yellow-400 bg-yellow-500/10'
+		                                  : 'border-slate-800'
+		                              }`}
+		                            >
+		                              {selectedInstruction.mask}
+		                            </div>
+		                          </div>
+		                        </div>
+
+		                      </div>
+		                    </div>
+		                  )}
 
                   {activeProfile && (
                     <div
@@ -943,26 +1636,6 @@ const RISCVExplorer = () => {
                 </p>
               </div>
             )}
-
-            {/* Legend / Help
-            <div className="mt-8 pt-6 border-t border-slate-800 text-[10px] text-slate-500 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-blue-950 border border-blue-800 rounded" />
-                <span>Base Architecture</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-emerald-950 border border-emerald-800 rounded" />
-                <span>Standard / Top-Level</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-purple-950/50 border border-purple-800/50 rounded" />
-                <span>Z-Extension (User)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-cyan-950/30 border border-cyan-800/30 rounded" />
-                <span>S-Extension (System)</span>
-              </div>
-            </div> */}
           </div>
         </div>
       </div>

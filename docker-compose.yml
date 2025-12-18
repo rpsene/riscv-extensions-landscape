@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   riscv-visualizer:
     container_name: riscv_app
