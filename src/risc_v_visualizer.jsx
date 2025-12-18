@@ -4,10 +4,22 @@ import {
   Info,
   ArrowRight,
   ArrowUpRight,
+  Copy,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import extensions from './riscv_extensions.json';
 
 const EncodingDiagram = ({ encoding }) => {
+  const scrollRef = React.useRef(null);
+  const rafRef = React.useRef(null);
+  const dragRef = React.useRef(null);
+  const [scrollState, setScrollState] = React.useState({
+    scrollLeft: 0,
+    scrollWidth: 0,
+    clientWidth: 0,
+  });
+
   const normalized = String(encoding || '').replace(/\s+/g, '');
   if (normalized.length !== 32) {
     return (
@@ -17,36 +29,185 @@ const EncodingDiagram = ({ encoding }) => {
     );
   }
 
+  const updateScrollState = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setScrollState((prev) => {
+      const next = {
+        scrollLeft: el.scrollLeft,
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      };
+      if (
+        prev.scrollLeft === next.scrollLeft &&
+        prev.scrollWidth === next.scrollWidth &&
+        prev.clientWidth === next.clientWidth
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    updateScrollState();
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      if (rafRef.current) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        updateScrollState();
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+
+    const onResize = () => updateScrollState();
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [updateScrollState, normalized]);
+
+  const maxScrollLeft = Math.max(0, scrollState.scrollWidth - scrollState.clientWidth);
+  const canScroll = maxScrollLeft > 0;
+  const atLeft = scrollState.scrollLeft <= 0;
+  const atRight = scrollState.scrollLeft >= maxScrollLeft - 1;
+  const scrollProgress = canScroll ? scrollState.scrollLeft / maxScrollLeft : 0;
+  const thumbRatio = canScroll ? Math.min(1, scrollState.clientWidth / scrollState.scrollWidth) : 1;
+  const thumbLeftPct = (1 - thumbRatio) * scrollProgress * 100;
+  const thumbWidthPct = thumbRatio * 100;
+
   return (
-    <div className="overflow-x-auto">
-      <div className="inline-grid grid-flow-col auto-cols-[18px] rounded border border-slate-800 bg-slate-950/40">
-        {normalized.split('').map((bit, i) => {
-          const isVar = bit === '-';
-          const isGroupEnd = (i + 1) % 4 === 0 && i !== 31;
-          const value = isVar ? 'x' : bit;
-          return (
-            <div
-              key={`${i}-${bit}`}
-              className={[
-                'h-7 flex items-center justify-center font-mono text-[11px]',
-                i === 0 ? 'rounded-l' : '',
-                i === 31 ? 'rounded-r' : '',
-                isVar
-                  ? 'bg-slate-900/50 text-purple-200'
-                  : 'bg-slate-800/30 text-slate-100',
-                isGroupEnd ? 'border-r-2 border-slate-700' : 'border-r border-slate-800',
-              ].join(' ')}
-              title={`bit ${31 - i}`}
-            >
-              {value}
-            </div>
-          );
-        })}
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+          <span>Bits</span>
+          {canScroll && (
+            <span className="inline-flex items-center gap-1 text-yellow-200/80 font-mono normal-case tracking-normal">
+              scroll <ArrowRight size={12} />
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="p-1 rounded border border-slate-700 bg-slate-900 text-slate-200 disabled:opacity-30"
+            onClick={() => scrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })}
+            disabled={!canScroll || atLeft}
+            title="Scroll left"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            type="button"
+            className="p-1 rounded border border-slate-700 bg-slate-900 text-slate-200 disabled:opacity-30"
+            onClick={() => scrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })}
+            disabled={!canScroll || atRight}
+            title="Scroll right"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
       </div>
-      <div className="mt-1 flex justify-between text-[10px] font-mono text-slate-500">
-        <span>31</span>
-        <span>0</span>
+
+      <div ref={scrollRef} className="overflow-x-auto">
+        <div className="inline-block pr-2">
+          <div className="inline-grid grid-flow-col auto-cols-[18px] rounded border border-slate-800 bg-slate-950/40">
+            {normalized.split('').map((bit, i) => {
+              const isVar = bit === '-';
+              const isGroupEnd = (i + 1) % 4 === 0 && i !== 31;
+              const value = isVar ? 'x' : bit;
+              return (
+                <div
+                  key={`${i}-${bit}`}
+                  className={[
+                    'h-7 flex items-center justify-center font-mono text-[11px]',
+                    i === 0 ? 'rounded-l' : '',
+                    i === 31 ? 'rounded-r' : '',
+                    isVar
+                      ? 'bg-slate-900/50 text-purple-200'
+                      : 'bg-slate-800/30 text-slate-100',
+                    i === 31
+                      ? ''
+                      : isGroupEnd
+                          ? 'border-r-2 border-slate-700'
+                          : 'border-r border-slate-800',
+                  ].join(' ')}
+                  title={`bit ${31 - i}`}
+                >
+                  {value}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-1 flex justify-between text-[10px] font-mono text-slate-500 px-0.5">
+            <span>31</span>
+            <span>0</span>
+          </div>
+        </div>
       </div>
+
+      {canScroll && (
+        <div
+          className="mt-2 h-2 rounded bg-purple-300/15 border border-purple-300/20 relative cursor-pointer"
+          onClick={(e) => {
+            const el = scrollRef.current;
+            if (!el) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = Math.min(Math.max(0, e.clientX - rect.left), rect.width);
+            const next = (x / rect.width) * maxScrollLeft;
+            el.scrollTo({ left: next, behavior: 'smooth' });
+          }}
+          role="presentation"
+          title="Click to scroll"
+        >
+          <div
+            className="absolute top-0 bottom-0 rounded bg-purple-200/40 border border-purple-200/30 cursor-grab active:cursor-grabbing"
+            style={{ left: `${thumbLeftPct}%`, width: `${thumbWidthPct}%` }}
+            onPointerDown={(e) => {
+              const el = scrollRef.current;
+              if (!el) return;
+              e.stopPropagation();
+              const track = e.currentTarget.parentElement;
+              if (!track) return;
+              const trackRect = track.getBoundingClientRect();
+              dragRef.current = {
+                pointerId: e.pointerId,
+                startX: e.clientX,
+                startScrollLeft: el.scrollLeft,
+                trackWidth: trackRect.width,
+              };
+              e.currentTarget.setPointerCapture(e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              const el = scrollRef.current;
+              const drag = dragRef.current;
+              if (!el || !drag || drag.pointerId !== e.pointerId) return;
+              const dx = e.clientX - drag.startX;
+              const delta = (dx / drag.trackWidth) * maxScrollLeft;
+              el.scrollLeft = Math.min(maxScrollLeft, Math.max(0, drag.startScrollLeft + delta));
+            }}
+            onPointerUp={(e) => {
+              const drag = dragRef.current;
+              if (!drag || drag.pointerId !== e.pointerId) return;
+              dragRef.current = null;
+              try {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              } catch {
+                // no-op
+              }
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -56,6 +217,7 @@ const RISCVExplorer = () => {
   const [activeVolume, setActiveVolume] = useState(null);
   const [selectedExt, setSelectedExt] = useState(null);
   const [selectedInstruction, setSelectedInstruction] = useState(null);
+  const [copyStatus, setCopyStatus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMatches, setSearchMatches] = useState(null);
   const lastScrolledKeyRef = React.useRef(null);
@@ -949,6 +1111,58 @@ const RISCVExplorer = () => {
     setSelectedInstruction(details ? { mnemonic, ...details } : null);
   }, []);
 
+  const formatInstructionForClipboard = React.useCallback((ext, instr) => {
+    if (!ext || !instr) return '';
+    const lines = [
+      `RISC-V Extension: ${ext.name} (${ext.id})`,
+      ext.desc ? `Description: ${ext.desc}` : null,
+      ext.use ? `Use: ${ext.use}` : null,
+      `Reference: ${ext.url || 'https://github.com/riscv/riscv-isa-manual'}`,
+      '',
+      `Instruction: ${instr.mnemonic}`,
+      instr.encoding ? `Encoding: ${instr.encoding}` : null,
+      Array.isArray(instr.variable_fields) && instr.variable_fields.length
+        ? `Variable fields: ${instr.variable_fields.join(', ')}`
+        : null,
+      instr.match ? `Match: ${instr.match}` : null,
+      instr.mask ? `Mask: ${instr.mask}` : null,
+      Array.isArray(instr.extension) && instr.extension.length
+        ? `Extension tags: ${instr.extension.join(', ')}`
+        : null,
+    ].filter(Boolean);
+    return `${lines.join('\n')}\n`;
+  }, []);
+
+  const copyTextToClipboard = React.useCallback(async (text) => {
+    if (!text) return false;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // fall through
+    }
+
+    try {
+      const el = document.createElement('textarea');
+      el.value = text;
+      el.setAttribute('readonly', 'true');
+      el.style.position = 'fixed';
+      el.style.top = '0';
+      el.style.left = '0';
+      el.style.opacity = '0';
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(el);
+      return ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const isHighlightedByProfile = (id) => {
     if (!activeProfile) return false;
     return profiles[activeProfile].includes(id);
@@ -1669,20 +1883,40 @@ const RISCVExplorer = () => {
 	                    </div>
 	                  )}
 
-	                  {selectedInstruction && (
-	                    <div className="bg-slate-950 p-3 rounded border border-slate-800">
-	                      <div className="flex items-start justify-between gap-3 mb-2">
-	                        <h4 className="text-[10px] uppercase tracking-wider text-purple-300 font-bold flex items-center gap-1">
-	                          <ArrowRight size={10} /> Instruction Details
-	                        </h4>
-	                        <button
-	                          type="button"
-	                          className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
-	                          onClick={() => setSelectedInstruction(null)}
-	                        >
-	                          Close
-	                        </button>
-	                      </div>
+		                  {selectedInstruction && (
+		                    <div className="bg-slate-950 p-3 rounded border border-slate-800">
+		                      <div className="flex items-start justify-between gap-3 mb-2">
+		                        <h4 className="text-[10px] uppercase tracking-wider text-purple-300 font-bold flex items-center gap-1">
+		                          <ArrowRight size={10} /> Instruction Details
+		                        </h4>
+		                        <div className="flex items-center gap-2">
+		                          <button
+		                            type="button"
+		                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-200 hover:border-slate-500"
+		                            onClick={async () => {
+		                              const text = formatInstructionForClipboard(selectedExt, selectedInstruction);
+		                              const ok = await copyTextToClipboard(text);
+		                              setCopyStatus(ok ? 'copied' : 'failed');
+		                              window.setTimeout(() => setCopyStatus(null), 1500);
+		                            }}
+		                            title="Copy extension + instruction details"
+		                          >
+		                            <Copy size={12} />
+		                            {copyStatus === 'copied'
+		                              ? 'Copied'
+		                              : copyStatus === 'failed'
+		                                  ? 'Copy failed'
+		                                  : 'Copy'}
+		                          </button>
+		                          <button
+		                            type="button"
+		                            className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
+		                            onClick={() => setSelectedInstruction(null)}
+		                          >
+		                            Close
+		                          </button>
+		                        </div>
+		                      </div>
 
 	                      <div className="mb-3">
 	                        <div className="text-white font-black tracking-tight text-xl">
