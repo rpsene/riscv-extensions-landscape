@@ -116,7 +116,7 @@ const EncodingDiagram = ({ encoding }) => {
   const normalized = String(encoding || '').replace(/\s+/g, '');
   if (normalized.length !== 32) {
     return (
-      <div className="font-mono text-[11px] text-slate-200 bg-slate-900/60 border border-slate-800 rounded px-2 py-1 break-all">
+      <div className="font-mono text-[11px] text-slate-100 bg-slate-800/70 border border-slate-700 rounded px-2 py-1 break-all">
         {encoding}
       </div>
     );
@@ -191,7 +191,7 @@ const EncodingDiagram = ({ encoding }) => {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="p-1 rounded border border-slate-700 bg-slate-900 text-slate-200 disabled:opacity-30"
+            className="p-1 rounded border border-slate-600 bg-slate-800 text-slate-100 disabled:opacity-30"
             onClick={() => scrollRef.current?.scrollBy({ left: -220, behavior: 'smooth' })}
             disabled={!canScroll || atLeft}
             title="Scroll left"
@@ -200,7 +200,7 @@ const EncodingDiagram = ({ encoding }) => {
           </button>
           <button
             type="button"
-            className="p-1 rounded border border-slate-700 bg-slate-900 text-slate-200 disabled:opacity-30"
+            className="p-1 rounded border border-slate-600 bg-slate-800 text-slate-100 disabled:opacity-30"
             onClick={() => scrollRef.current?.scrollBy({ left: 220, behavior: 'smooth' })}
             disabled={!canScroll || atRight}
             title="Scroll right"
@@ -212,7 +212,7 @@ const EncodingDiagram = ({ encoding }) => {
 
       <div ref={scrollRef} className="overflow-x-auto">
         <div className="inline-block pr-2">
-          <div className="inline-grid grid-flow-col auto-cols-[18px] rounded border border-slate-800 bg-slate-950/40">
+          <div className="inline-grid grid-flow-col auto-cols-[18px] rounded border border-slate-700 bg-slate-900/40">
             {normalized.split('').map((bit, i) => {
               const isVar = bit === '-';
               const isGroupEnd = (i + 1) % 4 === 0 && i !== 31;
@@ -225,13 +225,13 @@ const EncodingDiagram = ({ encoding }) => {
                     i === 0 ? 'rounded-l' : '',
                     i === 31 ? 'rounded-r' : '',
                     isVar
-                      ? 'bg-slate-900/50 text-purple-200'
-                      : 'bg-slate-800/30 text-slate-100',
+                      ? 'bg-slate-800/60 text-purple-100'
+                      : 'bg-slate-700/40 text-slate-100',
                     i === 31
                       ? ''
                       : isGroupEnd
-                          ? 'border-r-2 border-slate-700'
-                          : 'border-r border-slate-800',
+                          ? 'border-r-2 border-slate-600'
+                          : 'border-r border-slate-700',
                   ].join(' ')}
                   title={`bit ${31 - i}`}
                 >
@@ -1651,10 +1651,10 @@ const RISCVExplorer = () => {
 	  }, [searchQuery, extensionSearchIndexById]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-2 md:p-6 font-sans">
+    <div className="min-h-screen bg-slate-900 text-slate-50 p-2 md:p-6 font-sans">
 	      <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
 	        {/* Header */}
-	        <div className="lg:col-span-12 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 mb-2">
+	        <div className="lg:col-span-12 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-700 pb-4 mb-2">
 	          <div>
             <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
               RISC-V Extension Landscape
@@ -1684,9 +1684,9 @@ const RISCVExplorer = () => {
 	                    className={`
 	                      px-3 py-1 rounded text-xs font-bold border transition-all
 	                      ${
-	                        activeProfile === profile
-	                          ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
-	                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+		                        activeProfile === profile
+		                          ? 'bg-yellow-500/20 border-yellow-500 text-yellow-200'
+		                          : 'bg-slate-800 border-slate-600 text-slate-200 hover:border-slate-500'
 	                      }
 	                    `}
 	                  >
@@ -1717,9 +1717,9 @@ const RISCVExplorer = () => {
 	                    className={`
 	                      px-3 py-1 rounded text-xs font-bold border transition-all
 	                      ${
-	                        activeVolume === vol
-	                          ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
-	                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+		                        activeVolume === vol
+		                          ? 'bg-yellow-500/20 border-yellow-500 text-yellow-200'
+		                          : 'bg-slate-800 border-slate-600 text-slate-200 hover:border-slate-500'
 	                      }
 	                    `}
 	                  >
@@ -1729,7 +1729,7 @@ const RISCVExplorer = () => {
 		              </div>
 		            </div>
 
-		            <div className="hidden md:block h-7 w-px bg-slate-800" />
+		            <div className="hidden md:block h-7 w-px bg-slate-700" />
 
 		            <button
 		              type="button"
@@ -1738,7 +1738,7 @@ const RISCVExplorer = () => {
 		                setEncoderValidatorResult(null);
 		                setEncoderValidatorCopyStatus(null);
 		              }}
-		              className="inline-flex items-center gap-2 px-3 py-1 rounded text-xs font-bold border transition-all bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
+		              className="inline-flex items-center gap-2 px-3 py-1 rounded text-xs font-bold border transition-all bg-slate-800 border-slate-600 text-slate-100 hover:border-slate-500"
 		              title="Validate a proposed instruction encoding against existing instructions"
 		            >
 		              <ScanSearch size={16} />
@@ -1757,7 +1757,7 @@ const RISCVExplorer = () => {
 		                value={searchQuery}
 		                onChange={(e) => setSearchQuery(e.target.value)}
 		                placeholder="Search extensions by ID, name, or description..."
-		                className="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-yellow-200/30 text-sm text-slate-100 placeholder-slate-500 shadow-sm shadow-yellow-900/10 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+		                className="w-full px-4 py-2.5 rounded-lg bg-slate-800 border border-yellow-200/40 text-sm text-slate-100 placeholder-slate-400 shadow-sm shadow-yellow-900/10 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
 		              />
 		              <p className="mt-1 text-[10px] text-center text-slate-500">
 		                Typing here will highlight matching tiles in yellow (case-insensitive).
@@ -1800,7 +1800,7 @@ const RISCVExplorer = () => {
           </div>
 
           {/* 3. Z-Extensions (User Mode) */}
-          <div className="col-span-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4 border-t border-slate-800">
+	          <div className="col-span-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4 border-t border-slate-700">
 	            <div className="space-y-2">
 	              <h3 className="text-purple-400 text-xs font-bold uppercase flex items-center gap-2">
 	                Bit Manipulation (Zb)
@@ -1995,7 +1995,7 @@ const RISCVExplorer = () => {
 	          </div>
 
           {/* 4. S-Extensions (Privileged) */}
-          <div className="col-span-full pt-4 border-t border-slate-800">
+	          <div className="col-span-full pt-4 border-t border-slate-700">
             <h3 className="text-cyan-400 text-xs font-bold uppercase flex items-center gap-2 mb-3">
               S & Sv Extensions (Privileged)
             </h3>
@@ -2047,8 +2047,8 @@ const RISCVExplorer = () => {
 
 	        {/* Sidebar Info Panel */}
 		        <div className="lg:col-span-3 mt-6 lg:mt-0">
-		          <div className="sticky top-6 bg-slate-900/80 border border-slate-800 backdrop-blur-sm rounded-xl shadow-2xl min-h-[400px] max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
-	            <div className="p-4 pb-3 border-b border-slate-800/60">
+		          <div className="sticky top-6 bg-slate-800/80 border border-slate-700 backdrop-blur-sm rounded-xl shadow-2xl min-h-[400px] max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
+		            <div className="p-4 pb-3 border-b border-slate-700/60">
 	              <h2 className="text-sm font-bold text-slate-400 flex items-center gap-2 uppercase tracking-wide">
 	                <Info size={16} /> Selected Details
 	              </h2>
@@ -2086,7 +2086,7 @@ const RISCVExplorer = () => {
                     <p className="text-slate-200 leading-snug">{selectedExt.desc}</p>
                   </div>
 
-                  <div className="bg-slate-950 p-3 rounded border border-slate-800">
+                  <div className="bg-slate-900 p-3 rounded border border-slate-700">
                     <h4 className="text-[10px] uppercase tracking-wider text-blue-400 font-bold mb-2 flex items-center gap-1">
                       <ArrowRight size={10} /> Use Case
                     </h4>
@@ -2098,7 +2098,7 @@ const RISCVExplorer = () => {
 	                    searchMatches.extId === selectedExt.id &&
 	                    searchMatches.query === searchQuery.trim().toLowerCase() &&
 	                    searchMatches.mnemonics.length > 0 && (
-	                      <div className="bg-slate-950 p-3 rounded border border-slate-800">
+	                      <div className="bg-slate-900 p-3 rounded border border-slate-700">
 	                        <div className="flex items-center justify-between gap-3">
 	                          <div className="min-w-0">
 	                            <div className="text-[10px] uppercase tracking-wider text-yellow-300 font-bold mb-0.5">
@@ -2115,7 +2115,7 @@ const RISCVExplorer = () => {
 	                          <div className="flex items-center gap-2 shrink-0">
 	                            <button
 	                              type="button"
-	                              className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-200 disabled:opacity-40"
+	                              className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[10px] font-mono text-slate-100 disabled:opacity-40"
 	                              onClick={() => {
 	                                setSearchMatches((current) => {
 	                                  if (!current || current.extId !== selectedExt.id) return current;
@@ -2132,7 +2132,7 @@ const RISCVExplorer = () => {
 	                            </button>
 	                            <button
 	                              type="button"
-	                              className="px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-200 disabled:opacity-40"
+	                              className="px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[10px] font-mono text-slate-100 disabled:opacity-40"
 	                              onClick={() => {
 	                                setSearchMatches((current) => {
 	                                  if (!current || current.extId !== selectedExt.id) return current;
@@ -2152,7 +2152,7 @@ const RISCVExplorer = () => {
 	                    )}
 
 	                  {extensionInstructions[selectedExt.id] && (
-	                    <div className="bg-slate-950 p-3 rounded border border-slate-800">
+	                    <div className="bg-slate-900 p-3 rounded border border-slate-700">
 	                      <h4 className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold mb-2">
 	                        Instruction Set Snapshot ({extensionInstructions[selectedExt.id].length})
 	                      </h4>
@@ -2211,7 +2211,7 @@ const RISCVExplorer = () => {
 	                  )}
 
 		                  {selectedInstruction && (
-		                    <div className="bg-slate-950 p-3 rounded border border-slate-800">
+		                    <div className="bg-slate-900 p-3 rounded border border-slate-700">
 		                      <div className="flex items-start justify-between gap-3 mb-2">
 		                        <h4 className="text-[10px] uppercase tracking-wider text-purple-300 font-bold flex items-center gap-1">
 		                          <ArrowRight size={10} /> Instruction Details
@@ -2219,7 +2219,7 @@ const RISCVExplorer = () => {
 		                        <div className="flex items-center gap-2">
 		                          <button
 		                            type="button"
-		                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-[10px] font-mono text-slate-200 hover:border-slate-500"
+		                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[10px] font-mono text-slate-100 hover:border-slate-500"
 		                            onClick={async () => {
 		                              const text = formatInstructionForClipboard(selectedExt, selectedInstruction);
 		                              const ok = await copyTextToClipboard(text);
@@ -2285,13 +2285,13 @@ const RISCVExplorer = () => {
 		                              Match
 		                            </div>
 		                            <div
-		                              className={`font-mono text-[11px] text-slate-200 bg-slate-900/60 border rounded px-2 py-1 ${
+		                              className={`font-mono text-[11px] text-slate-100 bg-slate-800/70 border rounded px-2 py-1 ${
 		                                searchQuery.trim().length &&
 		                                String(selectedInstruction.match || '')
 		                                  .toLowerCase()
 		                                  .includes(searchQuery.trim().toLowerCase())
 		                                  ? 'border-yellow-400 bg-yellow-500/10'
-		                                  : 'border-slate-800'
+		                                  : 'border-slate-700'
 		                              }`}
 		                            >
 		                              {selectedInstruction.match}
@@ -2302,13 +2302,13 @@ const RISCVExplorer = () => {
 		                              Mask
 		                            </div>
 		                            <div
-		                              className={`font-mono text-[11px] text-slate-200 bg-slate-900/60 border rounded px-2 py-1 ${
+		                              className={`font-mono text-[11px] text-slate-100 bg-slate-800/70 border rounded px-2 py-1 ${
 		                                searchQuery.trim().length &&
 		                                String(selectedInstruction.mask || '')
 		                                  .toLowerCase()
 		                                  .includes(searchQuery.trim().toLowerCase())
 		                                  ? 'border-yellow-400 bg-yellow-500/10'
-		                                  : 'border-slate-800'
+		                                  : 'border-slate-700'
 		                              }`}
 		                            >
 		                              {selectedInstruction.mask}
@@ -2368,8 +2368,8 @@ const RISCVExplorer = () => {
 	          />
 
 	          <div className="absolute inset-0 p-3 md:p-8 flex items-start justify-center overflow-y-auto">
-	            <div className="w-full max-w-3xl bg-slate-950 border border-slate-800 rounded-xl shadow-2xl overflow-hidden">
-	              <div className="p-4 border-b border-slate-800 flex items-start justify-between gap-3">
+	            <div className="w-full max-w-3xl bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+	              <div className="p-4 border-b border-slate-700 flex items-start justify-between gap-3">
 	                <div className="min-w-0">
 	                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wide flex items-center gap-2">
 	                    <ScanSearch size={16} /> Encoder Validator
@@ -2382,7 +2382,7 @@ const RISCVExplorer = () => {
 
 	                <button
 	                  type="button"
-	                  className="p-2 rounded border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
+	                  className="p-2 rounded border border-slate-600 bg-slate-800 text-slate-100 hover:border-slate-500"
 	                  onClick={() => setEncoderValidatorOpen(false)}
 	                  title="Close"
 	                >
@@ -2403,7 +2403,7 @@ const RISCVExplorer = () => {
 	                        setEncoderValidatorInput((prev) => ({ ...prev, mnemonic: e.target.value }))
 	                      }
 	                      placeholder="e.g. MYOP"
-	                      className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                      className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
 	                    />
 	                  </div>
 
@@ -2418,7 +2418,7 @@ const RISCVExplorer = () => {
 	                        setEncoderValidatorInput((prev) => ({ ...prev, encoding: e.target.value }))
 	                      }
 	                      placeholder="-----------------000-----1100111"
-	                      className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                      className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
 	                    />
 	                  </div>
 
@@ -2434,7 +2434,7 @@ const RISCVExplorer = () => {
 	                          setEncoderValidatorInput((prev) => ({ ...prev, match: e.target.value }))
 	                        }
 	                        placeholder="0x67"
-	                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                        className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
 	                      />
 	                    </div>
 	                    <div>
@@ -2448,7 +2448,7 @@ const RISCVExplorer = () => {
 	                          setEncoderValidatorInput((prev) => ({ ...prev, mask: e.target.value }))
 	                        }
 	                        placeholder="0x707f"
-	                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                        className="w-full px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm font-mono text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
 	                      />
 	                    </div>
 	                  </div>
@@ -2470,7 +2470,7 @@ const RISCVExplorer = () => {
 	                        setEncoderValidatorResult(null);
 	                        setEncoderValidatorCopyStatus(null);
 	                      }}
-	                      className="px-3 py-2 rounded border border-slate-700 bg-slate-900 text-xs font-bold text-slate-200 hover:border-slate-500"
+	                      className="px-3 py-2 rounded border border-slate-600 bg-slate-800 text-xs font-bold text-slate-100 hover:border-slate-500"
 	                    >
 	                      Reset
 	                    </button>
@@ -2495,7 +2495,7 @@ const RISCVExplorer = () => {
 	                        setEncoderValidatorCopyStatus(ok ? 'copied' : 'failed');
 	                        window.setTimeout(() => setEncoderValidatorCopyStatus(null), 1500);
 	                      }}
-	                      className="inline-flex items-center gap-2 px-3 py-2 rounded border border-slate-700 bg-slate-900 text-xs font-bold text-slate-200 hover:border-slate-500 disabled:opacity-30"
+	                      className="inline-flex items-center gap-2 px-3 py-2 rounded border border-slate-600 bg-slate-800 text-xs font-bold text-slate-100 hover:border-slate-500 disabled:opacity-30"
 	                      title="Copy validation report"
 	                    >
 	                      <Copy size={14} />
@@ -2508,7 +2508,7 @@ const RISCVExplorer = () => {
 	                  </div>
 
 	                  {!encoderValidatorResult ? (
-	                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-3 bg-slate-900/40">
+	                    <div className="text-xs text-slate-400 border border-slate-700 rounded p-3 bg-slate-800/50">
 	                      Enter a proposed encoding and click Validate.
 	                    </div>
 	                  ) : (
@@ -2527,7 +2527,7 @@ const RISCVExplorer = () => {
 	                      )}
 
 	                      {encoderValidatorResult.proposed && (
-	                        <div className="border border-slate-800 rounded p-3 bg-slate-900/40">
+	                        <div className="border border-slate-700 rounded p-3 bg-slate-800/50">
 	                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">
 	                            Normalized Proposal
 	                          </div>
@@ -2544,7 +2544,7 @@ const RISCVExplorer = () => {
 	                      )}
 
 	                      {encoderValidatorResult.proposed && (
-	                        <div className="border border-slate-800 rounded p-3 bg-slate-900/40">
+	                        <div className="border border-slate-700 rounded p-3 bg-slate-800/50">
 	                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">
 	                            Conflicts ({encoderValidatorResult.conflicts.length})
 	                          </div>
@@ -2557,7 +2557,7 @@ const RISCVExplorer = () => {
 	                              {encoderValidatorResult.conflicts.map((conflict) => (
 	                                <div
 	                                  key={`${conflict.other.extId}:${conflict.other.mnemonic}:${conflict.type}`}
-	                                  className="border border-slate-800 rounded p-2 bg-slate-950/30"
+	                                  className="border border-slate-700 rounded p-2 bg-slate-900/50"
 	                                >
 	                                  <div className="flex items-start justify-between gap-2">
 	                                    <div className="min-w-0">
@@ -2567,7 +2567,7 @@ const RISCVExplorer = () => {
 	                                      </div>
 	                                      <div className="text-[11px] text-slate-500">{conflict.other.extName}</div>
 	                                    </div>
-	                                    <span className="shrink-0 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wide border bg-slate-900 text-slate-200 border-slate-700">
+	                                    <span className="shrink-0 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wide border bg-slate-800 text-slate-100 border-slate-600">
 	                                      {conflict.type}
 	                                    </span>
 	                                  </div>
