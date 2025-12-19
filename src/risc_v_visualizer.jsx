@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import {
   LayoutGrid,
   Info,
+  ScanSearch,
+  X,
   ArrowRight,
   ArrowUpRight,
   Copy,
@@ -9,6 +11,97 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import extensions from './riscv_extensions.json';
+
+const BIT_WIDTH = 32n;
+const BIT_MASK_32 = (1n << BIT_WIDTH) - 1n;
+
+const normalizeHexString = (value) => {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  return text.toLowerCase().startsWith('0x') ? text.toLowerCase() : `0x${text.toLowerCase()}`;
+};
+
+const parseHexToBigInt = (value) => {
+  const normalized = normalizeHexString(value);
+  if (!normalized) return null;
+  if (!/^0x[0-9a-f]+$/i.test(normalized)) return null;
+  try {
+    return BigInt(normalized);
+  } catch {
+    return null;
+  }
+};
+
+const toHex32 = (value) => {
+  const v = (value ?? 0n) & BIT_MASK_32;
+  return `0x${v.toString(16).padStart(8, '0')}`;
+};
+
+const normalizeEncodingString = (value) => {
+  const encoding = String(value ?? '').replace(/\s+/g, '');
+  if (!encoding) return '';
+  return encoding;
+};
+
+const encodingToMatchMask = (encoding) => {
+  const normalized = normalizeEncodingString(encoding);
+  if (!normalized) return { match: null, mask: null, error: 'Provide an encoding or match/mask.' };
+  if (normalized.length !== 32) {
+    return { match: null, mask: null, error: `Encoding must be 32 characters (got ${normalized.length}).` };
+  }
+  if (!/^[01-]{32}$/.test(normalized)) {
+    return { match: null, mask: null, error: 'Encoding may only contain 0, 1, and -.' };
+  }
+
+  let match = 0n;
+  let mask = 0n;
+  for (let i = 0; i < 32; i++) {
+    const bit = 31n - BigInt(i);
+    const ch = normalized[i];
+    if (ch === '-') continue;
+    mask |= 1n << bit;
+    if (ch === '1') match |= 1n << bit;
+  }
+  return { match, mask, error: null };
+};
+
+const matchMaskToEncoding = (match, mask) => {
+  const m = (match ?? 0n) & BIT_MASK_32;
+  const k = (mask ?? 0n) & BIT_MASK_32;
+  let out = '';
+  for (let bit = 31n; bit >= 0n; bit--) {
+    const bitMask = 1n << bit;
+    if ((k & bitMask) === 0n) out += '-';
+    else out += (m & bitMask) === 0n ? '0' : '1';
+  }
+  return out;
+};
+
+const patternsOverlap = (aMatch, aMask, bMatch, bMask) => {
+  const commonMask = (aMask & bMask) & BIT_MASK_32;
+  const diff = ((aMatch ^ bMatch) & commonMask) & BIT_MASK_32;
+  return diff === 0n;
+};
+
+const isSubsetPattern = (subsetMatch, subsetMask, supMatch, supMask) => {
+  const subsetMaskNorm = (subsetMask ?? 0n) & BIT_MASK_32;
+  const supMaskNorm = (supMask ?? 0n) & BIT_MASK_32;
+  const subsetMatchNorm = (subsetMatch ?? 0n) & BIT_MASK_32;
+  const supMatchNorm = (supMatch ?? 0n) & BIT_MASK_32;
+
+  const supBitsNotConstrainedBySubset = supMaskNorm & ~subsetMaskNorm;
+  if (supBitsNotConstrainedBySubset !== 0n) return false;
+  const mismatch = (subsetMatchNorm ^ supMatchNorm) & supMaskNorm;
+  return mismatch === 0n;
+};
+
+const overlapExampleWord = (aMatch, aMask, bMatch, bMask) => {
+  const am = (aMatch ?? 0n) & BIT_MASK_32;
+  const ak = (aMask ?? 0n) & BIT_MASK_32;
+  const bm = (bMatch ?? 0n) & BIT_MASK_32;
+  const bk = (bMask ?? 0n) & BIT_MASK_32;
+  return ((am & ak) | (bm & (bk & ~ak))) & BIT_MASK_32;
+};
 
 const EncodingDiagram = ({ encoding }) => {
   const scrollRef = React.useRef(null);
@@ -220,6 +313,15 @@ const RISCVExplorer = () => {
   const [copyStatus, setCopyStatus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMatches, setSearchMatches] = useState(null);
+  const [encoderValidatorOpen, setEncoderValidatorOpen] = useState(false);
+  const [encoderValidatorInput, setEncoderValidatorInput] = useState({
+    mnemonic: '',
+    encoding: '',
+    match: '',
+    mask: '',
+  });
+  const [encoderValidatorResult, setEncoderValidatorResult] = useState(null);
+  const [encoderValidatorCopyStatus, setEncoderValidatorCopyStatus] = useState(null);
   const lastScrolledKeyRef = React.useRef(null);
 
   // ---------------------------------------------------------------------------
@@ -1163,6 +1265,199 @@ const RISCVExplorer = () => {
     }
   }, []);
 
+  const allInstructionPatterns = React.useMemo(() => {
+    const patterns = [];
+    const allExts = Object.values(extensions).flat().filter(Boolean);
+
+    for (const ext of allExts) {
+      const instructions = ext?.instructions;
+      if (!instructions || typeof instructions !== 'object') continue;
+
+      for (const [mnemonic, details] of Object.entries(instructions)) {
+        const encoding = normalizeEncodingString(details?.encoding);
+        const matchParsed = parseHexToBigInt(details?.match);
+        const maskParsed = parseHexToBigInt(details?.mask);
+
+        let match = matchParsed;
+        let mask = maskParsed;
+
+        if ((match == null || mask == null) && encoding) {
+          const derived = encodingToMatchMask(encoding);
+          match = derived.match;
+          mask = derived.mask;
+        }
+
+        if (match == null || mask == null) continue;
+
+        patterns.push({
+          extId: ext.id,
+          extName: ext.name,
+          mnemonic,
+          encoding: encoding || matchMaskToEncoding(match, mask),
+          match: match & BIT_MASK_32,
+          mask: mask & BIT_MASK_32,
+          url: ext.url || 'https://github.com/riscv/riscv-isa-manual',
+        });
+      }
+    }
+
+    return patterns;
+  }, []);
+
+  const formatEncoderValidatorReport = React.useCallback((proposed, result) => {
+    const lines = [];
+    const now = new Date();
+    lines.push(`RISC-V Encoder Validation Report`);
+    lines.push(`Generated: ${now.toISOString()}`);
+    lines.push('');
+    if (proposed.mnemonic) lines.push(`Proposed mnemonic: ${proposed.mnemonic}`);
+    if (proposed.encoding) lines.push(`Proposed encoding: ${proposed.encoding}`);
+    if (proposed.match) lines.push(`Proposed match: ${proposed.match}`);
+    if (proposed.mask) lines.push(`Proposed mask: ${proposed.mask}`);
+    lines.push('');
+
+    if (result.errors.length) {
+      lines.push(`Errors (${result.errors.length}):`);
+      for (const err of result.errors) lines.push(`- ${err}`);
+      lines.push('');
+    }
+
+    lines.push(`Conflicts (${result.conflicts.length}):`);
+    if (!result.conflicts.length) {
+      lines.push(`- None found within the current instruction set database.`);
+      return `${lines.join('\n')}\n`;
+    }
+
+    for (const conflict of result.conflicts) {
+      lines.push(`- ${conflict.other.extId}:${conflict.other.mnemonic} (${conflict.type})`);
+      lines.push(`  Why: ${conflict.why}`);
+      if (conflict.commonMask) lines.push(`  Common mask: ${conflict.commonMask}`);
+      if (conflict.exampleWord) lines.push(`  Example word: ${conflict.exampleWord}`);
+    }
+    return `${lines.join('\n')}\n`;
+  }, []);
+
+  const runEncoderValidation = React.useCallback(() => {
+    const input = encoderValidatorInput;
+    const errors = [];
+
+    const proposedMnemonic = String(input.mnemonic || '').trim();
+    const proposedEncoding = normalizeEncodingString(input.encoding);
+    const proposedMatchInput = String(input.match || '').trim();
+    const proposedMaskInput = String(input.mask || '').trim();
+
+    let proposedMatch = null;
+    let proposedMask = null;
+    let normalizedEncoding = '';
+
+    const hasEncoding = Boolean(proposedEncoding);
+    const hasMatchMask = Boolean(proposedMatchInput || proposedMaskInput);
+
+    if (!hasEncoding && !hasMatchMask) {
+      errors.push('Provide either Encoding, or both Match and Mask.');
+    }
+
+    if (hasEncoding) {
+      const derived = encodingToMatchMask(proposedEncoding);
+      if (derived.error) errors.push(derived.error);
+      proposedMatch = derived.match;
+      proposedMask = derived.mask;
+      normalizedEncoding = proposedEncoding;
+    }
+
+    if (hasMatchMask) {
+      const matchParsed = parseHexToBigInt(proposedMatchInput);
+      const maskParsed = parseHexToBigInt(proposedMaskInput);
+      if (matchParsed == null) errors.push('Match must be a hex value like 0x1234.');
+      if (maskParsed == null) errors.push('Mask must be a hex value like 0x707f.');
+
+      if (matchParsed != null && maskParsed != null) {
+        const matchNorm = matchParsed & BIT_MASK_32;
+        const maskNorm = maskParsed & BIT_MASK_32;
+        if ((matchNorm & ~maskNorm) !== 0n) {
+          errors.push('Match contains bits outside Mask (match & ~mask must be 0).');
+        }
+
+        if (!hasEncoding) {
+          proposedMatch = matchNorm;
+          proposedMask = maskNorm;
+          normalizedEncoding = matchMaskToEncoding(matchNorm, maskNorm);
+        } else if (proposedMatch != null && proposedMask != null) {
+          const derivedMatchNorm = proposedMatch & BIT_MASK_32;
+          const derivedMaskNorm = proposedMask & BIT_MASK_32;
+          if (derivedMatchNorm !== matchNorm || derivedMaskNorm !== maskNorm) {
+            errors.push('Encoding does not match the provided Match/Mask.');
+          }
+        }
+      }
+    }
+
+    if (proposedMatch == null || proposedMask == null) {
+      setEncoderValidatorResult({ errors, proposed: null, conflicts: [] });
+      return;
+    }
+
+    const matchNorm = (proposedMatch ?? 0n) & BIT_MASK_32;
+    const maskNorm = (proposedMask ?? 0n) & BIT_MASK_32;
+
+    const proposed = {
+      mnemonic: proposedMnemonic,
+      encoding: normalizeEncodingString(normalizedEncoding) || matchMaskToEncoding(matchNorm, maskNorm),
+      match: toHex32(matchNorm),
+      mask: toHex32(maskNorm),
+      matchValue: matchNorm,
+      maskValue: maskNorm,
+    };
+
+    const conflicts = [];
+    for (const other of allInstructionPatterns) {
+      const overlaps = patternsOverlap(matchNorm, maskNorm, other.match, other.mask);
+      if (!overlaps) continue;
+
+      const commonMask = (maskNorm & other.mask) & BIT_MASK_32;
+      const type =
+        matchNorm === other.match && maskNorm === other.mask
+          ? 'identical'
+          : isSubsetPattern(matchNorm, maskNorm, other.match, other.mask)
+            ? 'proposed_subset_of_existing'
+            : isSubsetPattern(other.match, other.mask, matchNorm, maskNorm)
+              ? 'existing_subset_of_proposed'
+              : 'partial_overlap';
+
+      let why = 'Overlapping decode space (there exist instruction words that satisfy both patterns).';
+      if (type === 'identical') {
+        why = 'Exact same match/mask pattern.';
+      } else if (type === 'proposed_subset_of_existing') {
+        why =
+          'Your proposed pattern is more specific, but every word it matches also matches the existing instruction.';
+      } else if (type === 'existing_subset_of_proposed') {
+        why =
+          'Your proposed pattern is more general, and it would also match words intended for the existing instruction.';
+      }
+
+      const exampleWord = overlapExampleWord(matchNorm, maskNorm, other.match, other.mask);
+      conflicts.push({
+        other,
+        type,
+        why,
+        commonMask: toHex32(commonMask),
+        exampleWord: toHex32(exampleWord),
+      });
+    }
+
+    conflicts.sort((a, b) => {
+      const order = {
+        identical: 0,
+        proposed_subset_of_existing: 1,
+        existing_subset_of_proposed: 2,
+        partial_overlap: 3,
+      };
+      return (order[a.type] ?? 99) - (order[b.type] ?? 99);
+    });
+
+    setEncoderValidatorResult({ errors, proposed, conflicts });
+  }, [allInstructionPatterns, encoderValidatorInput]);
+
   const isHighlightedByProfile = (id) => {
     if (!activeProfile) return false;
     return profiles[activeProfile].includes(id);
@@ -1357,10 +1652,10 @@ const RISCVExplorer = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-2 md:p-6 font-sans">
-      <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Header */}
-        <div className="lg:col-span-12 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 mb-2">
-          <div>
+	      <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+	        {/* Header */}
+	        <div className="lg:col-span-12 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-800 pb-4 mb-2">
+	          <div>
             <h1 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-yellow-500">
               RISC-V Extension Landscape
             </h1>
@@ -1403,10 +1698,10 @@ const RISCVExplorer = () => {
 
 	            <div className="hidden md:block h-7 w-px bg-slate-800" />
 
-	            <div className="flex items-center gap-2">
-	              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-	                Volumes
-	              </span>
+		            <div className="flex items-center gap-2">
+		              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+		                Volumes
+		              </span>
 	              <div className="flex gap-2">
 	                {['I', 'II'].map((vol) => (
 	                  <button
@@ -1431,28 +1726,44 @@ const RISCVExplorer = () => {
 	                    Vol {vol}
 	                  </button>
 	                ))}
-	              </div>
-	            </div>
-	          </div>
-	        </div>
+		              </div>
+		            </div>
 
-        {/* Main Grid */}
-        <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min">
-          {/* Search Bar – centered, before Base Architectures */}
-	          <div className="col-span-full flex justify-center mb-3 -mt-1">
-	            <div className="w-full max-w-lg">
-	              <input
-	                type="text"
-	                value={searchQuery}
-	                onChange={(e) => setSearchQuery(e.target.value)}
-	                placeholder="Search extensions by ID, name, or description..."
-	                className="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-yellow-200/30 text-sm text-slate-100 placeholder-slate-500 shadow-sm shadow-yellow-900/10 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
-	              />
-              <p className="mt-1 text-[10px] text-center text-slate-500">
-                Typing here will highlight matching tiles in yellow (case-insensitive).
-              </p>
-            </div>
-          </div>
+		            <div className="hidden md:block h-7 w-px bg-slate-800" />
+
+		            <button
+		              type="button"
+		              onClick={() => {
+		                setEncoderValidatorOpen(true);
+		                setEncoderValidatorResult(null);
+		                setEncoderValidatorCopyStatus(null);
+		              }}
+		              className="inline-flex items-center gap-2 px-3 py-1 rounded text-xs font-bold border transition-all bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
+		              title="Validate a proposed instruction encoding against existing instructions"
+		            >
+		              <ScanSearch size={16} />
+		              Encoder Validator
+		            </button>
+		          </div>
+		        </div>
+
+	        {/* Main Grid */}
+	        <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min">
+	          {/* Search Bar – centered, before Base Architectures */}
+		          <div className="col-span-full flex justify-center mb-3 -mt-1">
+		            <div className="w-full max-w-lg">
+		              <input
+		                type="text"
+		                value={searchQuery}
+		                onChange={(e) => setSearchQuery(e.target.value)}
+		                placeholder="Search extensions by ID, name, or description..."
+		                className="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-yellow-200/30 text-sm text-slate-100 placeholder-slate-500 shadow-sm shadow-yellow-900/10 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+		              />
+		              <p className="mt-1 text-[10px] text-center text-slate-500">
+		                Typing here will highlight matching tiles in yellow (case-insensitive).
+		              </p>
+		            </div>
+		          </div>
 
           {/* 1. Base */}
           <div className="space-y-2 col-span-full">
@@ -1735,8 +2046,8 @@ const RISCVExplorer = () => {
         </div>
 
 	        {/* Sidebar Info Panel */}
-	        <div className="lg:col-span-3 mt-6 lg:mt-0">
-	          <div className="sticky top-6 bg-slate-900/80 border border-slate-800 backdrop-blur-sm rounded-xl shadow-2xl min-h-[400px] max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
+		        <div className="lg:col-span-3 mt-6 lg:mt-0">
+		          <div className="sticky top-6 bg-slate-900/80 border border-slate-800 backdrop-blur-sm rounded-xl shadow-2xl min-h-[400px] max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
 	            <div className="p-4 pb-3 border-b border-slate-800/60">
 	              <h2 className="text-sm font-bold text-slate-400 flex items-center gap-2 uppercase tracking-wide">
 	                <Info size={16} /> Selected Details
@@ -2044,11 +2355,248 @@ const RISCVExplorer = () => {
 	                </div>
 	              )}
 	            </div>
+		          </div>
+		        </div>
+	      </div>
+
+	      {encoderValidatorOpen && (
+	        <div className="fixed inset-0 z-50">
+	          <div
+	            className="absolute inset-0 bg-black/60"
+	            onClick={() => setEncoderValidatorOpen(false)}
+	            role="presentation"
+	          />
+
+	          <div className="absolute inset-0 p-3 md:p-8 flex items-start justify-center overflow-y-auto">
+	            <div className="w-full max-w-3xl bg-slate-950 border border-slate-800 rounded-xl shadow-2xl overflow-hidden">
+	              <div className="p-4 border-b border-slate-800 flex items-start justify-between gap-3">
+	                <div className="min-w-0">
+	                  <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wide flex items-center gap-2">
+	                    <ScanSearch size={16} /> Encoder Validator
+	                  </h3>
+	                  <p className="text-xs text-slate-500 mt-1">
+	                    Provide either a 32-bit Encoding pattern (0/1/-), or Match+Mask (hex). The validator lists any
+	                    existing instructions that overlap.
+	                  </p>
+	                </div>
+
+	                <button
+	                  type="button"
+	                  className="p-2 rounded border border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
+	                  onClick={() => setEncoderValidatorOpen(false)}
+	                  title="Close"
+	                >
+	                  <X size={16} />
+	                </button>
+	              </div>
+
+	              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+	                <div className="space-y-3">
+	                  <div>
+	                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+	                      Proposed mnemonic (optional)
+	                    </div>
+	                    <input
+	                      type="text"
+	                      value={encoderValidatorInput.mnemonic}
+	                      onChange={(e) =>
+	                        setEncoderValidatorInput((prev) => ({ ...prev, mnemonic: e.target.value }))
+	                      }
+	                      placeholder="e.g. MYOP"
+	                      className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                    />
+	                  </div>
+
+	                  <div>
+	                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+	                      Encoding (required if no match/mask)
+	                    </div>
+	                    <input
+	                      type="text"
+	                      value={encoderValidatorInput.encoding}
+	                      onChange={(e) =>
+	                        setEncoderValidatorInput((prev) => ({ ...prev, encoding: e.target.value }))
+	                      }
+	                      placeholder="-----------------000-----1100111"
+	                      className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                    />
+	                  </div>
+
+	                  <div className="grid grid-cols-2 gap-3">
+	                    <div>
+	                      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+	                        Match (hex)
+	                      </div>
+	                      <input
+	                        type="text"
+	                        value={encoderValidatorInput.match}
+	                        onChange={(e) =>
+	                          setEncoderValidatorInput((prev) => ({ ...prev, match: e.target.value }))
+	                        }
+	                        placeholder="0x67"
+	                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                      />
+	                    </div>
+	                    <div>
+	                      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+	                        Mask (hex)
+	                      </div>
+	                      <input
+	                        type="text"
+	                        value={encoderValidatorInput.mask}
+	                        onChange={(e) =>
+	                          setEncoderValidatorInput((prev) => ({ ...prev, mask: e.target.value }))
+	                        }
+	                        placeholder="0x707f"
+	                        className="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800 text-sm font-mono text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-yellow-400/60 focus:border-yellow-300"
+	                      />
+	                    </div>
+	                  </div>
+
+	                  <div className="flex items-center gap-2 pt-1">
+	                    <button
+	                      type="button"
+	                      onClick={runEncoderValidation}
+	                      className="inline-flex items-center gap-2 px-3 py-2 rounded border border-yellow-500/50 bg-yellow-500/10 text-yellow-200 text-xs font-bold hover:border-yellow-400"
+	                    >
+	                      <ScanSearch size={16} />
+	                      Validate
+	                    </button>
+
+	                    <button
+	                      type="button"
+	                      onClick={() => {
+	                        setEncoderValidatorInput({ mnemonic: '', encoding: '', match: '', mask: '' });
+	                        setEncoderValidatorResult(null);
+	                        setEncoderValidatorCopyStatus(null);
+	                      }}
+	                      className="px-3 py-2 rounded border border-slate-700 bg-slate-900 text-xs font-bold text-slate-200 hover:border-slate-500"
+	                    >
+	                      Reset
+	                    </button>
+	                  </div>
+	                </div>
+
+	                <div className="space-y-3">
+	                  <div className="flex items-center justify-between gap-2">
+	                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+	                      Results
+	                    </div>
+	                    <button
+	                      type="button"
+	                      disabled={!encoderValidatorResult?.proposed}
+	                      onClick={async () => {
+	                        if (!encoderValidatorResult?.proposed) return;
+	                        const report = formatEncoderValidatorReport(
+	                          encoderValidatorResult.proposed,
+	                          encoderValidatorResult
+	                        );
+	                        const ok = await copyTextToClipboard(report);
+	                        setEncoderValidatorCopyStatus(ok ? 'copied' : 'failed');
+	                        window.setTimeout(() => setEncoderValidatorCopyStatus(null), 1500);
+	                      }}
+	                      className="inline-flex items-center gap-2 px-3 py-2 rounded border border-slate-700 bg-slate-900 text-xs font-bold text-slate-200 hover:border-slate-500 disabled:opacity-30"
+	                      title="Copy validation report"
+	                    >
+	                      <Copy size={14} />
+	                      {encoderValidatorCopyStatus === 'copied'
+	                        ? 'Copied'
+	                        : encoderValidatorCopyStatus === 'failed'
+	                          ? 'Copy failed'
+	                          : 'Copy report'}
+	                    </button>
+	                  </div>
+
+	                  {!encoderValidatorResult ? (
+	                    <div className="text-xs text-slate-500 border border-slate-800 rounded p-3 bg-slate-900/40">
+	                      Enter a proposed encoding and click Validate.
+	                    </div>
+	                  ) : (
+	                    <div className="space-y-3">
+	                      {encoderValidatorResult.errors.length > 0 && (
+	                        <div className="border border-red-800/40 bg-red-950/30 rounded p-3">
+	                          <div className="text-[10px] uppercase tracking-wider text-red-200 font-bold mb-2">
+	                            Errors
+	                          </div>
+	                          <ul className="text-xs text-red-100 space-y-1 list-disc pl-4">
+	                            {encoderValidatorResult.errors.map((err) => (
+	                              <li key={err}>{err}</li>
+	                            ))}
+	                          </ul>
+	                        </div>
+	                      )}
+
+	                      {encoderValidatorResult.proposed && (
+	                        <div className="border border-slate-800 rounded p-3 bg-slate-900/40">
+	                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">
+	                            Normalized Proposal
+	                          </div>
+	                          <div className="space-y-2">
+	                            <div className="font-mono text-[11px] text-slate-200 break-all">
+	                              Encoding: {encoderValidatorResult.proposed.encoding}
+	                            </div>
+	                            <div className="grid grid-cols-2 gap-2">
+	                              <div className="font-mono text-[11px] text-slate-200">Match: {encoderValidatorResult.proposed.match}</div>
+	                              <div className="font-mono text-[11px] text-slate-200">Mask: {encoderValidatorResult.proposed.mask}</div>
+	                            </div>
+	                          </div>
+	                        </div>
+	                      )}
+
+	                      {encoderValidatorResult.proposed && (
+	                        <div className="border border-slate-800 rounded p-3 bg-slate-900/40">
+	                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-2">
+	                            Conflicts ({encoderValidatorResult.conflicts.length})
+	                          </div>
+	                          {encoderValidatorResult.conflicts.length === 0 ? (
+	                            <div className="text-xs text-emerald-200">
+	                              No overlaps found within the current instruction set database.
+	                            </div>
+	                          ) : (
+	                            <div className="space-y-2 max-h-[340px] overflow-y-auto overscroll-contain pr-1">
+	                              {encoderValidatorResult.conflicts.map((conflict) => (
+	                                <div
+	                                  key={`${conflict.other.extId}:${conflict.other.mnemonic}:${conflict.type}`}
+	                                  className="border border-slate-800 rounded p-2 bg-slate-950/30"
+	                                >
+	                                  <div className="flex items-start justify-between gap-2">
+	                                    <div className="min-w-0">
+	                                      <div className="font-mono text-xs text-slate-200 break-words">
+	                                        {conflict.other.mnemonic}{' '}
+	                                        <span className="text-slate-500">({conflict.other.extId})</span>
+	                                      </div>
+	                                      <div className="text-[11px] text-slate-500">{conflict.other.extName}</div>
+	                                    </div>
+	                                    <span className="shrink-0 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wide border bg-slate-900 text-slate-200 border-slate-700">
+	                                      {conflict.type}
+	                                    </span>
+	                                  </div>
+
+	                                  <div className="mt-2 text-xs text-slate-300">{conflict.why}</div>
+	                                  <div className="mt-2 grid grid-cols-2 gap-2">
+	                                    <div className="font-mono text-[10px] text-slate-400">
+	                                      Common mask: {conflict.commonMask}
+	                                    </div>
+	                                    <div className="font-mono text-[10px] text-slate-400">
+	                                      Example word: {conflict.exampleWord}
+	                                    </div>
+	                                  </div>
+	                                </div>
+	                              ))}
+	                            </div>
+	                          )}
+	                        </div>
+	                      )}
+	                    </div>
+	                  )}
+	                </div>
+	              </div>
+	            </div>
 	          </div>
 	        </div>
-      </div>
-    </div>
-  );
-};
+	      )}
+	    </div>
+	  );
+	};
 
 export default RISCVExplorer;
