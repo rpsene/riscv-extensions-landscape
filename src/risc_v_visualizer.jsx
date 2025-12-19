@@ -1522,14 +1522,14 @@ const RISCVExplorer = () => {
 	              </div>
 	            </div>
 
-	            <div className="space-y-2">
-	              <h3 className="text-indigo-400 text-xs font-bold uppercase flex items-center gap-2">
-	                Compression (Zc)
-	              </h3>
-	              <div className="grid grid-cols-2 gap-2">
-                {extensions.z_compress.map((item) => (
-                  <ExtensionBlock
-                    key={item.id}
+		            <div className="space-y-2">
+		              <h3 className="text-indigo-400 text-xs font-bold uppercase flex items-center gap-2">
+		                Compressed Instructions (Zc)
+		              </h3>
+		              <div className="grid grid-cols-2 gap-2">
+	                {extensions.z_compress.map((item) => (
+	                  <ExtensionBlock
+	                    key={item.id}
                     data={item}
                     searchQuery={searchQuery}
                     colorClass="bg-indigo-950/50 border-indigo-800/50 text-indigo-100"
@@ -1554,21 +1554,37 @@ const RISCVExplorer = () => {
 	              </div>
 	            </div>
 
-	            <div className="space-y-2">
-	              <h3 className="text-fuchsia-300 text-xs font-bold uppercase flex items-center gap-2">
-	                Additional Base ISA
-	              </h3>
-	              <div className="grid grid-cols-2 gap-2">
-	                {extensions.z_additional_base.map((item) => (
-	                  <ExtensionBlock
-	                    key={item.id}
-	                    data={item}
-	                    searchQuery={searchQuery}
-	                    colorClass="bg-fuchsia-950/40 border-fuchsia-800/40 text-fuchsia-100"
-	                  />
-	                ))}
-	              </div>
-	            </div>
+		            <div className="space-y-2">
+		              <h3 className="text-sky-400 text-xs font-bold uppercase flex items-center gap-2">
+		                Load/Store
+		              </h3>
+		              <div className="grid grid-cols-2 gap-2">
+		                {extensions.z_load_store.map((item) => (
+		                  <ExtensionBlock
+		                    key={item.id}
+		                    data={item}
+		                    searchQuery={searchQuery}
+		                    colorClass="bg-sky-950/40 border-sky-800/40 text-sky-100"
+		                  />
+		                ))}
+		              </div>
+		            </div>
+
+		            <div className="space-y-2">
+		              <h3 className="text-fuchsia-300 text-xs font-bold uppercase flex items-center gap-2">
+		                Integer
+		              </h3>
+		              <div className="grid grid-cols-2 gap-2">
+		                {extensions.z_integer.map((item) => (
+		                  <ExtensionBlock
+		                    key={item.id}
+		                    data={item}
+		                    searchQuery={searchQuery}
+		                    colorClass="bg-fuchsia-950/40 border-fuchsia-800/40 text-fuchsia-100"
+		                  />
+		                ))}
+		              </div>
+		            </div>
 
 	            <div className="space-y-2">
 	              <h3 className="text-teal-400 text-xs font-bold uppercase flex items-center gap-2">

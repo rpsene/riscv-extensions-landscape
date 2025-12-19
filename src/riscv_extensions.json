@@ -7756,7 +7756,7 @@
       "url": "https://github.com/riscv/riscv-isa-manual"
     }
   ],
-  "z_additional_base": [
+  "z_load_store": [
     {
       "id": "Zicclsm",
       "name": "Zicclsm",
@@ -7765,17 +7765,19 @@
       "url": "https://github.com/riscv/riscv-isa-manual"
     },
     {
-      "id": "Zicond",
-      "name": "Zicond",
-      "desc": "Integer Conditional Ops",
-      "use": "Branchless selects / cmov",
-      "url": "https://github.com/riscv/riscv-isa-manual"
-    },
-    {
       "id": "Zilsd",
       "name": "Zilsd",
       "desc": "Load/Store Pair for RV32",
       "use": "Streaming loads/stores (data)",
+      "url": "https://github.com/riscv/riscv-isa-manual"
+    }
+  ],
+  "z_integer": [
+    {
+      "id": "Zicond",
+      "name": "Zicond",
+      "desc": "Integer Conditional Ops",
+      "use": "Branchless selects / cmov",
       "url": "https://github.com/riscv/riscv-isa-manual"
     }
   ],
