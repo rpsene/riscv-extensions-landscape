@@ -4183,6 +4183,74 @@
           ],
           "match": "0x48005013",
           "mask": "0xfc00707f"
+        },
+        "SLO": {
+          "encoding": "0010000----------001-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "rs2"
+          ],
+          "extension": [
+            "rv_zbb"
+          ],
+          "match": "0x20001033",
+          "mask": "0xfe00707f",
+          "deprecated": true
+        },
+        "SLOI": {
+          "encoding": "001000-----------001-----0010011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "shamtd"
+          ],
+          "extension": [
+            "rv64_zbb"
+          ],
+          "match": "0x20001013",
+          "mask": "0xfc00707f",
+          "deprecated": true
+        },
+        "SRO": {
+          "encoding": "0010000----------101-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "rs2"
+          ],
+          "extension": [
+            "rv_zbb"
+          ],
+          "match": "0x20005033",
+          "mask": "0xfe00707f",
+          "deprecated": true
+        },
+        "SROI": {
+          "encoding": "001000-----------101-----0010011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "shamtd"
+          ],
+          "extension": [
+            "rv64_zbb"
+          ],
+          "match": "0x20005013",
+          "mask": "0xfc00707f",
+          "deprecated": true
+        },
+        "ZEXT.H": {
+          "encoding": "000010000000-----100-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv_zbb"
+          ],
+          "match": "0x8004033",
+          "mask": "0xfff0707f"
         }
       },
       "url": "https://github.com/riscv/riscv-isa-manual"
@@ -4617,6 +4685,108 @@
             "rv_c_d"
           ],
           "match": "0xa002",
+          "mask": "0xe003"
+        },
+        "C.LD": {
+          "encoding": "----------------011-----------00",
+          "variable_fields": [
+            "rd_p",
+            "rs1_p",
+            "c_uimm8lo",
+            "c_uimm8hi"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0x6000",
+          "mask": "0xe003"
+        },
+        "C.SD": {
+          "encoding": "----------------111-----------00",
+          "variable_fields": [
+            "rs1_p",
+            "rs2_p",
+            "c_uimm8hi",
+            "c_uimm8lo"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0xe000",
+          "mask": "0xe003"
+        },
+        "C.ADDIW": {
+          "encoding": "----------------001-----------01",
+          "variable_fields": [
+            "rd_rs1_n0",
+            "c_imm6lo",
+            "c_imm6hi"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0x2001",
+          "mask": "0xe003"
+        },
+        "C.ADD": {
+          "encoding": "----------------1001----------10",
+          "variable_fields": [
+            "rd_rs1_n0",
+            "c_rs2_n0"
+          ],
+          "extension": [
+            "rv_c"
+          ],
+          "match": "0x9002",
+          "mask": "0xf003"
+        },
+        "C.SUBW": {
+          "encoding": "----------------100111---00---01",
+          "variable_fields": [
+            "rd_rs1_p",
+            "rs2_p"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0x9c01",
+          "mask": "0xfc63"
+        },
+        "C.ADDW": {
+          "encoding": "----------------100111---01---01",
+          "variable_fields": [
+            "rd_rs1_p",
+            "rs2_p"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0x9c21",
+          "mask": "0xfc63"
+        },
+        "C.LDSP": {
+          "encoding": "----------------011-----------10",
+          "variable_fields": [
+            "rd_n0",
+            "c_uimm9sphi",
+            "c_uimm9splo"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0x6002",
+          "mask": "0xe003"
+        },
+        "C.SDSP": {
+          "encoding": "----------------111-----------10",
+          "variable_fields": [
+            "c_rs2",
+            "c_uimm9sp_s"
+          ],
+          "extension": [
+            "rv64_c"
+          ],
+          "match": "0xe002",
           "mask": "0xe003"
         }
       },
@@ -5574,6 +5744,16 @@
           ],
           "match": "0x68304073",
           "mask": "0xfff0707f"
+        },
+        "HRET": {
+          "encoding": "00100000001000000000000001110011",
+          "variable_fields": [],
+          "extension": [
+            "rv_h"
+          ],
+          "match": "0x20200073",
+          "mask": "0xffffffff",
+          "deprecated": true
         }
       },
       "url": "https://github.com/riscv/riscv-isa-manual"
@@ -5834,6 +6014,28 @@
           ],
           "match": "0x10501013",
           "mask": "0xfff0707f"
+        },
+        "CSRRAND": {
+          "encoding": "00000001010100000010-----1110011",
+          "variable_fields": [
+            "rd"
+          ],
+          "extension": [
+            "rv_zkr"
+          ],
+          "match": "0x1502073",
+          "mask": "0xfffff07f"
+        },
+        "CSRRAND64": {
+          "encoding": "00000001010100000010-----1110011",
+          "variable_fields": [
+            "rd"
+          ],
+          "extension": [
+            "rv64_zkr"
+          ],
+          "match": "0x1502073",
+          "mask": "0xfffff07f"
         }
       },
       "url": "https://github.com/riscv/riscv-isa-manual"
@@ -6402,6 +6604,30 @@
           ],
           "match": "0xe6001053",
           "mask": "0xfff0707f"
+        },
+        "FMV.X.Q": {
+          "encoding": "111000110000-----000-----1010011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv_q"
+          ],
+          "match": "0xe3000053",
+          "mask": "0xfff0707f"
+        },
+        "FMV.Q.X": {
+          "encoding": "111100110000-----000-----1010011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv_q"
+          ],
+          "match": "0xf3000053",
+          "mask": "0xfff0707f"
         }
       },
       "url": "https://github.com/riscv/riscv-isa-manual"
@@ -6469,6 +6695,15 @@
             "rv_i"
           ],
           "match": "0x100073",
+          "mask": "0xffffffff"
+        },
+        "URET": {
+          "encoding": "00000000001000000000000001110011",
+          "variable_fields": [],
+          "extension": [
+            "rv_u"
+          ],
+          "match": "0x200073",
           "mask": "0xffffffff"
         }
       },
@@ -7407,6 +7642,74 @@
             "rv_zbb"
           ],
           "match": "0x60501013",
+          "mask": "0xfff0707f"
+        },
+        "SLO": {
+          "encoding": "0010000----------001-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "rs2"
+          ],
+          "extension": [
+            "rv_zbb"
+          ],
+          "match": "0x20001033",
+          "mask": "0xfe00707f",
+          "deprecated": true
+        },
+        "SLOI": {
+          "encoding": "001000-----------001-----0010011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "shamtd"
+          ],
+          "extension": [
+            "rv64_zbb"
+          ],
+          "match": "0x20001013",
+          "mask": "0xfc00707f",
+          "deprecated": true
+        },
+        "SRO": {
+          "encoding": "0010000----------101-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "rs2"
+          ],
+          "extension": [
+            "rv_zbb"
+          ],
+          "match": "0x20005033",
+          "mask": "0xfe00707f",
+          "deprecated": true
+        },
+        "SROI": {
+          "encoding": "001000-----------101-----0010011",
+          "variable_fields": [
+            "rd",
+            "rs1",
+            "shamtd"
+          ],
+          "extension": [
+            "rv64_zbb"
+          ],
+          "match": "0x20005013",
+          "mask": "0xfc00707f",
+          "deprecated": true
+        },
+        "ZEXT.H": {
+          "encoding": "000010000000-----100-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv_zbb"
+          ],
+          "match": "0x8004033",
           "mask": "0xfff0707f"
         }
       },

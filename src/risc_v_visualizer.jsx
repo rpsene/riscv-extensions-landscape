@@ -1244,14 +1244,17 @@ const RISCVExplorer = () => {
       // Integer compressed
       'C.ADDI4SPN',
       'C.LW', 'C.SW',
-      'C.NOP', 'C.ADDI',
+      'C.LD', 'C.SD',
+      'C.NOP', 'C.ADDI', 'C.ADDIW',
       'C.JAL', 'C.LI',
       'C.ADDI16SP', 'C.LUI',
       'C.SRLI', 'C.SRAI', 'C.ANDI',
-      'C.SUB', 'C.XOR', 'C.OR', 'C.AND',
+      'C.SUB', 'C.XOR', 'C.OR', 'C.AND', 'C.ADD',
+      'C.SUBW', 'C.ADDW',
       'C.J', 'C.BEQZ', 'C.BNEZ',
       'C.SLLI',
       'C.LWSP', 'C.SWSP',
+      'C.LDSP', 'C.SDSP',
       'C.JR', 'C.MV', 'C.EBREAK', 'C.JALR',
       // FP compressed (when F/D present)
       'C.FLW', 'C.FSW',
@@ -1391,18 +1394,6 @@ const RISCVExplorer = () => {
       'SRET',
       'SFENCE.VMA',
       'WFI',
-
-      // Core supervisor CSRs (accessed via CSR* ops)
-      'SSTATUS',
-      'SIE', 'SIP',
-      'STVEC',
-      'SSCRATCH',
-      'SEPC',
-      'SCAUSE',
-      'STVAL',
-
-      // Address-translation control
-      'SATP',
     ],
     U: [
       // User-level environment instructions (Volume II)
@@ -1410,8 +1401,21 @@ const RISCVExplorer = () => {
       'URET',
       'ECALL',
       'EBREAK',
+    ],
+  };
 
-      // User-level CSRs (accessed via CSR* ops)
+  const extensionCsrs = {
+    S: [
+      'SSTATUS',
+      'SIE', 'SIP',
+      'STVEC',
+      'SSCRATCH',
+      'SEPC',
+      'SCAUSE',
+      'STVAL',
+      'SATP',
+    ],
+    U: [
       'USTATUS',
       'UIE', 'UIP',
       'UTVEC',
@@ -1420,6 +1424,11 @@ const RISCVExplorer = () => {
       'UCAUSE',
       'UTVAL',
     ],
+  };
+
+  const extensionCsrLabels = {
+    S: 'Supervisor CSRs',
+    U: 'User CSRs',
   };
 
   // ---------------------------------------------------------------------------
@@ -1535,7 +1544,9 @@ const RISCVExplorer = () => {
   const hasStandardEquivalent =
     Boolean(standardEquivalentMnemonic) && instructionIndex.get(standardEquivalentMnemonic)?.length;
   const compressedEquivalents = selectedInstruction
-    ? COMPRESSED_BY_STANDARD[normalizeMnemonicKey(selectedInstruction.mnemonic)] || []
+    ? (COMPRESSED_BY_STANDARD[normalizeMnemonicKey(selectedInstruction.mnemonic)] || []).filter((entry) =>
+        instructionIndex.has(normalizeMnemonicKey(entry.mnemonic))
+      )
     : [];
 
   const formatInstructionForClipboard = React.useCallback((ext, instr) => {
@@ -1807,6 +1818,10 @@ const RISCVExplorer = () => {
       const mnemonicList = extensionInstructions[ext.id];
       if (Array.isArray(mnemonicList) && mnemonicList.length) {
         parts.push(mnemonicList.join(' '));
+      }
+      const csrList = extensionCsrs[ext.id];
+      if (Array.isArray(csrList) && csrList.length) {
+        parts.push(csrList.join(' '));
       }
 
       const instructions = ext.instructions;
@@ -2491,6 +2506,7 @@ const RISCVExplorer = () => {
 		                              instructionMatchesQuery(mnemonic, instructionDetails, q));
 		                          const isActive = selectedInstruction?.mnemonic === mnemonic;
 		                          const isClickable = Boolean(instructionDetails);
+		                          const isDeprecated = Boolean(instructionDetails?.deprecated);
 		                          return (
 	                            <button
 	                              key={mnemonic}
@@ -2515,10 +2531,14 @@ const RISCVExplorer = () => {
 		                              }}
 	                              className={`px-1.5 py-0.5 rounded border text-[10px] font-mono tracking-tight ${
 	                                isActive
-	                                  ? 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
+	                                  ? isDeprecated
+	                                      ? 'border-red-400 bg-red-500/10 text-red-200'
+	                                      : 'border-emerald-400 bg-emerald-500/10 text-emerald-200'
 	                                  : isHit
 	                                      ? 'border-yellow-400 bg-yellow-500/10 text-yellow-200'
-	                                      : 'border-slate-700 bg-slate-800/70'
+	                                      : isDeprecated
+	                                          ? 'border-red-500/60 bg-red-500/5 text-red-200'
+	                                          : 'border-slate-700 bg-slate-800/70'
 	                              }`}
 	                              title={
 	                                isClickable
@@ -2534,6 +2554,25 @@ const RISCVExplorer = () => {
 	                      </div>
 	                    </div>
 	                  )}
+
+                    {extensionCsrs[selectedExt.id] && (
+                      <div className="bg-slate-900 p-3 rounded border border-slate-700">
+                        <h4 className="text-[10px] uppercase tracking-wider text-sky-300 font-bold mb-2">
+                          {(extensionCsrLabels[selectedExt.id] || 'CSRs')}{' '}
+                          ({extensionCsrs[selectedExt.id].length})
+                        </h4>
+                        <div className="flex flex-wrap gap-1">
+                          {extensionCsrs[selectedExt.id].map((csr) => (
+                            <span
+                              key={csr}
+                              className="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800/70 text-[10px] font-mono text-slate-200"
+                            >
+                              {csr}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
 		                  {selectedInstruction && (
 		                    <div className="bg-slate-900 p-3 rounded border border-slate-700">
@@ -2570,10 +2609,15 @@ const RISCVExplorer = () => {
 		                        </div>
 		                      </div>
 
-	                      <div className="mb-3">
+	                      <div className="mb-3 flex items-start justify-between gap-2">
 	                        <div className="text-white font-black tracking-tight text-xl">
 	                          {selectedInstruction.mnemonic}
 	                        </div>
+	                        {selectedInstruction.deprecated && (
+	                          <span className="shrink-0 px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-wide border bg-red-950/40 text-red-200 border-red-600/60">
+	                            Discontinued
+	                          </span>
+	                        )}
 	                      </div>
 
 	                      <div className="space-y-3">
