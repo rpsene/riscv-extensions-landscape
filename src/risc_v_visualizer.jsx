@@ -15,6 +15,264 @@ import extensions from './riscv_extensions.json';
 const BIT_WIDTH = 32n;
 const BIT_MASK_32 = (1n << BIT_WIDTH) - 1n;
 
+const normalizeMnemonicKey = (value) => String(value ?? '').trim().toUpperCase().split(/\s+/)[0];
+
+const COMPRESSED_INSTRUCTION_MAPPINGS = [
+  {
+    mnemonic: 'C.NOP',
+    compressed: 'C.NOP',
+    standard: 'addi x0, x0, 0',
+    description: 'No Operation',
+    notes: '',
+  },
+  {
+    mnemonic: 'C.LI',
+    compressed: 'C.LI rd, imm',
+    standard: 'addi rd, x0, imm',
+    description: 'Load Immediate',
+    notes: 'Expands to addi with x0.',
+  },
+  {
+    mnemonic: 'C.LUI',
+    compressed: 'C.LUI rd, imm',
+    standard: 'lui rd, imm',
+    description: 'Load Upper Immediate',
+    notes: '',
+  },
+  {
+    mnemonic: 'C.ADDI',
+    compressed: 'C.ADDI rd, imm',
+    standard: 'addi rd, rd, imm',
+    description: 'Add Immediate',
+    notes: '',
+  },
+  {
+    mnemonic: 'C.ADDIW',
+    compressed: 'C.ADDIW rd, imm',
+    standard: 'addiw rd, rd, imm',
+    description: 'Add Word Immediate',
+    notes: 'RV64/128 Only.',
+  },
+  {
+    mnemonic: 'C.ADDI16SP',
+    compressed: 'C.ADDI16SP imm',
+    standard: 'addi sp, sp, imm',
+    description: 'Adjust Stack Pointer',
+    notes: 'Specific to sp (x2).',
+  },
+  {
+    mnemonic: 'C.ADDI4SPN',
+    compressed: "C.ADDI4SPN rd', imm",
+    standard: "addi rd', sp, imm",
+    description: 'Add Immediate, Scaled 4, SP rel',
+    notes: "Used to generate pointers to stack variables. Destination rd' must be x8-x15.",
+  },
+  {
+    mnemonic: 'C.SLLI',
+    compressed: 'C.SLLI rd, imm',
+    standard: 'slli rd, rd, imm',
+    description: 'Shift Left Logical Imm',
+    notes: '',
+  },
+  {
+    mnemonic: 'C.SRLI',
+    compressed: "C.SRLI rd', imm",
+    standard: "srli rd', rd', imm",
+    description: 'Shift Right Logical Imm',
+    notes: "rd' restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.SRAI',
+    compressed: "C.SRAI rd', imm",
+    standard: "srai rd', rd', imm",
+    description: 'Shift Right Arithmetic Imm',
+    notes: "rd' restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.ANDI',
+    compressed: "C.ANDI rd', imm",
+    standard: "andi rd', rd', imm",
+    description: 'AND Immediate',
+    notes: "rd' restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.MV',
+    compressed: 'C.MV rd, rs2',
+    standard: 'add rd, x0, rs2',
+    description: 'Move Register',
+    notes: 'Copies rs2 to rd.',
+  },
+  {
+    mnemonic: 'C.ADD',
+    compressed: 'C.ADD rd, rs2',
+    standard: 'add rd, rd, rs2',
+    description: 'Add Register',
+    notes: 'rd += rs2.',
+  },
+  {
+    mnemonic: 'C.AND',
+    compressed: "C.AND rd', rs2'",
+    standard: "and rd', rd', rs2'",
+    description: 'AND Register',
+    notes: "Operands restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.OR',
+    compressed: "C.OR rd', rs2'",
+    standard: "or rd', rd', rs2'",
+    description: 'OR Register',
+    notes: "Operands restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.XOR',
+    compressed: "C.XOR rd', rs2'",
+    standard: "xor rd', rd', rs2'",
+    description: 'XOR Register',
+    notes: "Operands restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.SUB',
+    compressed: "C.SUB rd', rs2'",
+    standard: "sub rd', rd', rs2'",
+    description: 'Subtract Register',
+    notes: "Operands restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.SUBW',
+    compressed: "C.SUBW rd', rs2'",
+    standard: "subw rd', rd', rs2'",
+    description: 'Subtract Word',
+    notes: "RV64/128 Only. Operands restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.ADDW',
+    compressed: "C.ADDW rd', rs2'",
+    standard: "addw rd', rd', rs2'",
+    description: 'Add Word',
+    notes: "RV64/128 Only. Operands restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.LW',
+    compressed: "C.LW rd', imm(rs1')",
+    standard: "lw rd', offset(rs1')",
+    description: 'Load Word',
+    notes: "rd' and rs1' must be x8-x15.",
+  },
+  {
+    mnemonic: 'C.SW',
+    compressed: "C.SW rs2', imm(rs1')",
+    standard: "sw rs2', offset(rs1')",
+    description: 'Store Word',
+    notes: "rs2' and rs1' must be x8-x15.",
+  },
+  {
+    mnemonic: 'C.LD',
+    compressed: "C.LD rd', imm(rs1')",
+    standard: "ld rd', offset(rs1')",
+    description: 'Load Doubleword',
+    notes: 'RV64/128 Only.',
+  },
+  {
+    mnemonic: 'C.SD',
+    compressed: "C.SD rs2', imm(rs1')",
+    standard: "sd rs2', offset(rs1')",
+    description: 'Store Doubleword',
+    notes: 'RV64/128 Only.',
+  },
+  {
+    mnemonic: 'C.LWSP',
+    compressed: 'C.LWSP rd, imm',
+    standard: 'lw rd, offset(sp)',
+    description: 'Load Word (SP-relative)',
+    notes: 'Uses sp implicitly. rd cannot be x0.',
+  },
+  {
+    mnemonic: 'C.SWSP',
+    compressed: 'C.SWSP rs2, imm',
+    standard: 'sw rs2, offset(sp)',
+    description: 'Store Word (SP-relative)',
+    notes: 'Uses sp implicitly.',
+  },
+  {
+    mnemonic: 'C.LDSP',
+    compressed: 'C.LDSP rd, imm',
+    standard: 'ld rd, offset(sp)',
+    description: 'Load Double (SP-relative)',
+    notes: 'RV64/128 Only.',
+  },
+  {
+    mnemonic: 'C.SDSP',
+    compressed: 'C.SDSP rs2, imm',
+    standard: 'sd rs2, offset(sp)',
+    description: 'Store Double (SP-relative)',
+    notes: 'RV64/128 Only.',
+  },
+  {
+    mnemonic: 'C.J',
+    compressed: 'C.J offset',
+    standard: 'jal x0, offset',
+    description: 'Jump (Unconditional)',
+    notes: 'Essentially a goto.',
+  },
+  {
+    mnemonic: 'C.JAL',
+    compressed: 'C.JAL offset',
+    standard: 'jal x1, offset',
+    description: 'Jump and Link',
+    notes: 'RV32 Only. Calls a function (saves return addr to ra).',
+  },
+  {
+    mnemonic: 'C.JR',
+    compressed: 'C.JR rs1',
+    standard: 'jalr x0, 0(rs1)',
+    description: 'Jump Register',
+    notes: 'Returns from function (if rs1 is ra).',
+  },
+  {
+    mnemonic: 'C.JALR',
+    compressed: 'C.JALR rs1',
+    standard: 'jalr x1, 0(rs1)',
+    description: 'Jump and Link Register',
+    notes: 'Calls function pointer; saves return addr to ra.',
+  },
+  {
+    mnemonic: 'C.BEQZ',
+    compressed: "C.BEQZ rs1', offset",
+    standard: "beq rs1', x0, offset",
+    description: 'Branch if Equal to Zero',
+    notes: "rs1' restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.BNEZ',
+    compressed: "C.BNEZ rs1', offset",
+    standard: "bne rs1', x0, offset",
+    description: 'Branch if Not Equal Zero',
+    notes: "rs1' restricted to x8-x15.",
+  },
+  {
+    mnemonic: 'C.EBREAK',
+    compressed: 'C.EBREAK',
+    standard: 'ebreak',
+    description: 'Environment Break',
+    notes: 'Used for debuggers.',
+  },
+];
+
+const COMPRESSED_INSTRUCTION_LOOKUP = COMPRESSED_INSTRUCTION_MAPPINGS.reduce((acc, entry) => {
+  acc[normalizeMnemonicKey(entry.mnemonic)] = entry;
+  return acc;
+}, {});
+
+const COMPRESSED_BY_STANDARD = COMPRESSED_INSTRUCTION_MAPPINGS.reduce((acc, entry) => {
+  const key = normalizeMnemonicKey(entry.standard);
+  if (!key) return acc;
+  if (!acc[key]) acc[key] = [];
+  acc[key].push(entry);
+  return acc;
+}, {});
+
+const STANDARD_EQUIVALENT_PRIORITY = ['RV32I', 'RV64I', 'RV128I', 'RV32E', 'RV64E'];
+
 const normalizeHexString = (value) => {
   const text = String(value ?? '').trim();
   if (!text) return '';
@@ -1213,6 +1471,73 @@ const RISCVExplorer = () => {
     setSelectedInstruction(details ? { mnemonic, ...details } : null);
   }, []);
 
+  const instructionIndex = React.useMemo(() => {
+    const index = new Map();
+    const allExts = Object.values(extensions).flat().filter(Boolean);
+
+    for (const ext of allExts) {
+      const instructions = ext?.instructions;
+      if (!instructions || typeof instructions !== 'object') continue;
+
+      for (const [mnemonic, details] of Object.entries(instructions)) {
+        const key = normalizeMnemonicKey(mnemonic);
+        if (!key) continue;
+        if (!index.has(key)) index.set(key, []);
+        index.get(key).push({ ext, mnemonic, details });
+      }
+    }
+
+    return index;
+  }, []);
+
+  const selectInstructionByMnemonicKey = React.useCallback(
+    (mnemonicKey, preferredExtIds = []) => {
+      const key = normalizeMnemonicKey(mnemonicKey);
+      if (!key) return false;
+      const candidates = instructionIndex.get(key);
+      if (!candidates || !candidates.length) return false;
+
+      let chosen = null;
+      for (const extId of preferredExtIds) {
+        chosen = candidates.find((entry) => entry.ext.id === extId);
+        if (chosen) break;
+      }
+      if (!chosen && selectedExt) {
+        chosen = candidates.find((entry) => entry.ext.id === selectedExt.id);
+      }
+      if (!chosen) [chosen] = candidates;
+
+      if (!chosen) return false;
+      setSelectedExt(chosen.ext);
+      setSelectedInstruction({ mnemonic: chosen.mnemonic, ...chosen.details });
+      setSearchMatches(null);
+      return true;
+    },
+    [instructionIndex, selectedExt]
+  );
+
+  const selectStandardEquivalent = React.useCallback(
+    (mnemonic) => selectInstructionByMnemonicKey(mnemonic, STANDARD_EQUIVALENT_PRIORITY),
+    [selectInstructionByMnemonicKey]
+  );
+
+  const selectCompressedEquivalent = React.useCallback(
+    (mnemonic) => selectInstructionByMnemonicKey(mnemonic, ['C']),
+    [selectInstructionByMnemonicKey]
+  );
+
+  const compressedMapping = selectedInstruction
+    ? COMPRESSED_INSTRUCTION_LOOKUP[normalizeMnemonicKey(selectedInstruction.mnemonic)]
+    : null;
+  const standardEquivalentMnemonic = compressedMapping
+    ? normalizeMnemonicKey(compressedMapping.standard)
+    : '';
+  const hasStandardEquivalent =
+    Boolean(standardEquivalentMnemonic) && instructionIndex.get(standardEquivalentMnemonic)?.length;
+  const compressedEquivalents = selectedInstruction
+    ? COMPRESSED_BY_STANDARD[normalizeMnemonicKey(selectedInstruction.mnemonic)] || []
+    : [];
+
   const formatInstructionForClipboard = React.useCallback((ext, instr) => {
     if (!ext || !instr) return '';
     const lines = [
@@ -2315,6 +2640,101 @@ const RISCVExplorer = () => {
 		                            </div>
 		                          </div>
 		                        </div>
+
+                        {compressedMapping && (
+                          <div className="rounded border border-slate-700 bg-slate-950/50 p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-cyan-300 font-bold mb-2">
+                              Compressed Mapping
+                            </div>
+                            <div className="space-y-2">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                                  Compressed
+                                </div>
+                                <div className="font-mono text-[11px] text-slate-100 bg-slate-800/70 border border-slate-700 rounded px-2 py-1">
+                                  {compressedMapping.compressed}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                                  Standard Equivalent
+                                </div>
+                                {hasStandardEquivalent ? (
+                                  <button
+                                    type="button"
+                                    className="w-full text-left font-mono text-[11px] text-slate-100 bg-slate-800/70 border border-slate-700 rounded px-2 py-1 hover:border-cyan-400/60"
+                                    onClick={() => selectStandardEquivalent(standardEquivalentMnemonic)}
+                                    title="Open standard instruction details"
+                                  >
+                                    <span className="inline-flex items-center gap-1">
+                                      {compressedMapping.standard}
+                                      <ArrowUpRight size={12} className="opacity-70" />
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <div className="font-mono text-[11px] text-slate-100 bg-slate-800/70 border border-slate-700 rounded px-2 py-1">
+                                    {compressedMapping.standard}
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                                  Equivalent Instruction
+                                </div>
+                                {standardEquivalentMnemonic ? (
+                                  hasStandardEquivalent ? (
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-200 hover:text-cyan-100 underline"
+                                      onClick={() => selectStandardEquivalent(standardEquivalentMnemonic)}
+                                      title="Open standard instruction details"
+                                    >
+                                      {standardEquivalentMnemonic}
+                                      <ArrowUpRight size={12} className="opacity-70" />
+                                    </button>
+                                  ) : (
+                                    <div className="text-[11px] text-slate-500 font-mono">
+                                      {standardEquivalentMnemonic}
+                                    </div>
+                                  )
+                                ) : (
+                                  <div className="text-[11px] text-slate-500">Unavailable</div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                                  Description
+                                </div>
+                                <div className="text-[11px] text-slate-200">{compressedMapping.description}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {compressedEquivalents.length > 0 && (
+                          <div className="rounded border border-slate-700 bg-slate-950/40 p-3">
+                            <div className="text-[10px] uppercase tracking-wider text-emerald-300 font-bold mb-2">
+                              Compressed Equivalents
+                            </div>
+                            <div className="space-y-2">
+                              {compressedEquivalents.map((entry) => (
+                                <button
+                                  key={entry.mnemonic}
+                                  type="button"
+                                  className="w-full text-left rounded border border-slate-700 bg-slate-900/60 px-2 py-1.5 hover:border-emerald-400/60"
+                                  onClick={() => selectCompressedEquivalent(entry.mnemonic)}
+                                  title={`Open ${entry.mnemonic} details`}
+                                >
+                                  <div className="flex items-center gap-1 text-[11px] font-mono text-emerald-200">
+                                    {normalizeMnemonicKey(entry.mnemonic)}
+                                    <ArrowUpRight size={12} className="opacity-70" />
+                                  </div>
+                                  <div className="text-[10px] font-mono text-slate-400">{entry.compressed}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
 		                      </div>
 		                    </div>
