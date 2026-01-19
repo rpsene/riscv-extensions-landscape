@@ -7,6 +7,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Copy,
+  Braces,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -569,6 +570,7 @@ const RISCVExplorer = () => {
   const [selectedExt, setSelectedExt] = useState(null);
   const [selectedInstruction, setSelectedInstruction] = useState(null);
   const [copyStatus, setCopyStatus] = useState(null);
+  const [copyJsonStatus, setCopyJsonStatus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMatches, setSearchMatches] = useState(null);
   const [encoderValidatorOpen, setEncoderValidatorOpen] = useState(false);
@@ -3103,11 +3105,12 @@ const RISCVExplorer = () => {
 
 		                  {selectedInstruction && (
 		                    <div className="bg-slate-900 p-3 rounded border border-slate-700">
-		                      <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="mb-2">
 		                        <h4 className="text-[10px] uppercase tracking-wider text-purple-300 font-bold flex items-center gap-1">
 		                          <ArrowRight size={10} /> Instruction Details
 		                        </h4>
-		                        <div className="flex items-center gap-2">
+                            </div>
+		                        <div className="flex items-center gap-2 justify-end">
 		                          <button
 		                            type="button"
 		                            className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[10px] font-mono text-slate-100 hover:border-slate-500"
@@ -3124,8 +3127,43 @@ const RISCVExplorer = () => {
 		                              ? 'Copied'
 		                              : copyStatus === 'failed'
 		                                  ? 'Copy failed'
-		                                  : 'Copy'}
+		                                  : 'Copy TEXT'}
 		                          </button>
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-600 bg-slate-800 text-[10px] font-mono text-slate-100 hover:border-slate-500"
+                              onClick={async () => {
+                                const json = {
+                                  extension: selectedExt.id,
+                                  description: selectedExt.desc,
+                                  use: selectedExt.use,
+                                  reference: selectedExt.url,
+                                  mnemonic: selectedInstruction.mnemonic,
+                                  encoding: selectedInstruction.encoding,
+                                  variable_fields: selectedInstruction.variable_fields,
+                                  extension_tags: selectedInstruction.extension,
+                                  match: selectedInstruction.match,
+                                  mask: selectedInstruction.mask,
+                                };
+
+                                const ok = await copyTextToClipboard(
+                                  JSON.stringify(json, null, 2)
+                                );
+
+                                setCopyJsonStatus(ok ? 'copied' : 'failed');
+                                window.setTimeout(() => setCopyJsonStatus(null), 1500);
+                              }}
+                              title="Copy instruction as JSON"
+                            >
+                              <Braces size={12} />
+                              {copyJsonStatus === 'copied'
+                                ? 'Copied'
+                                : copyJsonStatus === 'failed'
+                                  ? 'Copy failed'
+                                  : 'Copy JSON'}
+                            </button>
+
+
 		                          <button
 		                            type="button"
 		                            className="text-[10px] font-mono text-slate-500 hover:text-slate-300"
@@ -3134,8 +3172,9 @@ const RISCVExplorer = () => {
 		                            Close
 		                          </button>
 		                        </div>
-		                      </div>
-
+		                     
+                       
+                          
 	                      <div className="mb-3 flex items-start justify-between gap-2">
 	                        <div className="text-white font-black tracking-tight text-xl">
 	                          {selectedInstruction.mnemonic}
