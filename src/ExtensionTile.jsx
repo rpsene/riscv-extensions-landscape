@@ -228,13 +228,26 @@ function ExtensionTile({
           })()}
       </div>
 
-      <div className="flex items-start justify-between mb-1">
+      <div className="flex flex-wrap items-center gap-1.5 mb-1 pr-6">
         <span
-          className="font-mono font-semibold text-[12px] leading-tight"
+          className="font-mono font-semibold text-[12px] leading-tight break-all"
           style={{ letterSpacing: '0.02em' }}
         >
           {data.name}
         </span>
+        {data.isSandbox && (
+          <span
+            className="px-1 py-[1px] mt-px rounded text-[8.5px] font-mono uppercase tracking-wider font-semibold shrink-0"
+            style={{
+              background: 'rgba(59,130,246,0.15)',
+              color: 'var(--riscv-accent-4, #60a5fa)',
+              border: '1px solid rgba(59,130,246,0.35)',
+              lineHeight: 1,
+            }}
+          >
+            Sandbox
+          </span>
+        )}
       </div>
       {/* The short label, not `desc`. The tile is 190px wide - about 32
           characters a line, 65 in the two-line clamp - so a full description
