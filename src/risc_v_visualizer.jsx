@@ -841,6 +841,56 @@ const RISCVExplorer = () => {
   }, [profileMenuOpen]);
   const [quickExportOpen, setQuickExportOpen] = useState(false);
 
+  /*
+   * The question the Ask AI button opens with, derived from whatever the reader
+   * currently has open.
+   *
+   * kapa's open() takes a `query` and pre-fills its box with it. That is a
+   * documented, supported option — worth recording, because an earlier probe
+   * concluded it was ignored. That probe ran while the widget was not yet
+   * allowlisted for this origin, so it was mounting nothing at all and no
+   * option could have had any effect. Re-tested once the widget worked: it
+   * pre-fills.
+   *
+   * Deliberately no `submit`. The question is a starting point the reader can
+   * edit, not one sent on their behalf.
+   *
+   * Ordered most specific first: an open instruction is narrower than the
+   * extension behind it, which is narrower than the builder.
+   */
+  const askAiQuery = React.useMemo(() => {
+    if (selectedExt?.id && selectedInstruction?.mnemonic) {
+      /*
+       * Gated on the extension as well as the instruction.
+       *
+       * Not on instructionExpandOpen: that flag is only true for the expanded
+       * encoding modal, so clicking ADD inside RV32I never satisfied it and the
+       * question fell through to the extension.
+       *
+       * But the instruction alone is not enough either. Closing the details
+       * panel clears selectedExt and leaves selectedInstruction set, so a
+       * reader who picked ADD, closed the panel and then opened the builder
+       * would be asked about ADD. An instruction is only meaningful inside the
+       * extension showing it, so both must be present.
+       */
+      return `What does the ${selectedInstruction.mnemonic} instruction in ${selectedExt.id} do, and how is it encoded?`;
+    }
+    if (selectedExt?.id) {
+      // `short` is the readable label ("Address-Generation Bitmanip"); `name`
+      // is usually just the id again, so it would read "Zba (Zba)".
+      const short =
+        selectedExt.short && selectedExt.short !== selectedExt.id ? ` (${selectedExt.short})` : '';
+      return `What does the ${selectedExt.id} extension${short} do, and what depends on it?`;
+    }
+    if (workspacePanelOpen) {
+      const picked = Array.from(workspaceIds || []);
+      return picked.length
+        ? `I am building a RISC-V ISA configuration with ${picked.join(', ')}. What should I know about combining these?`
+        : 'How do I choose a set of RISC-V extensions for a custom ISA configuration?';
+    }
+    return null;
+  }, [instructionExpandOpen, selectedInstruction, selectedExt, workspacePanelOpen, workspaceIds]);
+
   // Escape dismisses the Selected Details panel, matching the button's tooltip.
   //
   // Deliberately last in line: every dialog that can sit above the panel is
@@ -866,6 +916,7 @@ const RISCVExplorer = () => {
         return;
       }
       setSelectedExt(null);
+      setSelectedInstruction(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -2120,7 +2171,6 @@ const RISCVExplorer = () => {
                   </a>
                 </div>
               </div>
-
 
               {/* Controls Area.
                   items-end right-aligns children, so a child wider than this
@@ -3456,9 +3506,7 @@ const RISCVExplorer = () => {
             id="detail-panel"
             role="region"
             aria-label="Selected extension details"
-            className={`lg:col-span-4 mt-6 lg:mt-0 ${
-              selectedExt ? 'panel-open' : 'hidden'
-            }`}
+            className={`lg:col-span-4 mt-6 lg:mt-0 ${selectedExt ? 'panel-open' : 'hidden'}`}
           >
             <div
               className="sticky top-6 riscv-card backdrop-blur-sm min-h-[400px] max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden"
@@ -3488,7 +3536,10 @@ const RISCVExplorer = () => {
                 */}
                 <button
                   type="button"
-                  onClick={() => setSelectedExt(null)}
+                  onClick={() => {
+                    setSelectedExt(null);
+                    setSelectedInstruction(null);
+                  }}
                   aria-label="Close details panel"
                   title="Close (Esc)"
                   className="p-1 rounded-md transition-colors riscv-panel-dismiss"
@@ -4305,7 +4356,10 @@ const RISCVExplorer = () => {
                 </button>
               </div>
 
-              <div className="p-4 text-[13px] leading-relaxed" style={{ color: 'var(--riscv-text-2)' }}>
+              <div
+                className="p-4 text-[13px] leading-relaxed"
+                style={{ color: 'var(--riscv-text-2)' }}
+              >
                 <p>
                   Browse every ratified RISC-V extension, its instructions and their encodings.{' '}
                   <span style={{ color: 'var(--riscv-text-3)' }}>
@@ -5294,7 +5348,7 @@ const RISCVExplorer = () => {
       />
 
       {/* ── Ask AI Launcher ── */}
-      <AskAiLauncher />
+      <AskAiLauncher query={askAiQuery} />
 
       {/* ── Workspace Notices Toast ── */}
       <div
