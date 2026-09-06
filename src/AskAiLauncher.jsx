@@ -46,7 +46,7 @@ function nearestCorner(x, y) {
   return `${v}-${h}`;
 }
 
-const AskAiLauncher = ({ query = null }) => {
+const AskAiLauncher = ({ context = null }) => {
   const [corner, setCorner] = React.useState(() => {
     try {
       const saved = window.localStorage.getItem(LS_KEY);
@@ -79,7 +79,7 @@ const AskAiLauncher = ({ query = null }) => {
     // resetting left the chip stuck mid-buzz — holding its accent border and
     // refusing to animate again — whenever the context went away inside the
     // 700ms window.
-    if (!query) {
+    if (!context?.query) {
       setBuzzing(false);
       return undefined;
     }
@@ -100,7 +100,7 @@ const AskAiLauncher = ({ query = null }) => {
       cancelAnimationFrame(frameId);
       clearTimeout(timeoutId);
     };
-  }, [query]);
+  }, [context?.query]);
 
   const dragStartRef = React.useRef(null);
 
@@ -135,7 +135,12 @@ const AskAiLauncher = ({ query = null }) => {
     // clicked "Ask AI" with Zba open gets the answer rather than a form to
     // press enter on. Without a selection there is nothing to ask, so the
     // modal opens empty and waits.
-    const args = query ? { mode: 'ai', query, submit: true } : { mode: 'ai' };
+    // Whether to send is the caller's decision: an extension or instruction is
+    // a clean single question worth asking outright, while the builder opens a
+    // sentence for the reader to finish.
+    const args = context?.query
+      ? { mode: 'ai', query: context.query, submit: Boolean(context.submit) }
+      : { mode: 'ai' };
 
     /*
      * Plain open, no lifecycle games.
@@ -152,7 +157,7 @@ const AskAiLauncher = ({ query = null }) => {
      * setSourceGroupIDs); asking them for one is the route, not remounting.
      */
     window.Kapa.open(args);
-  }, [query]);
+  }, [context]);
 
   const onPointerDown = React.useCallback((e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;

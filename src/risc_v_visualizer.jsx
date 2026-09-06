@@ -858,79 +858,63 @@ const RISCVExplorer = () => {
    * Ordered most specific first: an open instruction is narrower than the
    * extension behind it, which is narrower than the builder.
    */
-  const askAiQuery = React.useMemo(() => {
-    if (selectedExt?.id && selectedInstruction?.mnemonic) {
+  /*
+   * What the Ask AI button opens with, derived from whatever the reader has on
+   * screen. Returns the question and whether to send it, because those differ
+   * per context.
+   *
+   * Two rules, both from putting the wording to independent review:
+   *
+   * 1. Only the extension id and instruction mnemonic go in. `short` is our own
+   *    editorial label ("Address-Generation Bitmanip"), written for the tiles
+   *    and absent from the specifications kapa retrieves over, so it dilutes
+   *    the match against the one token that does appear verbatim: the id. It
+   *    also produced nonsense on the 41 entries whose short contains
+   *    parentheses, worst of all "the Shvstvala extension (Virtual Supervisor
+   *    Trap Value (vstval) provides all needed values)".
+   *
+   * 2. Single intent. Asking two things at once pulls the query vector between
+   *    them and retrieves a weaker match for both. The dependency and encoding
+   *    detail arrives anyway, because it sits in the same spec passage.
+   *
+   * "RISC-V" is named explicitly. Ids like B, V and M are ambiguous, and the
+   * model writing the answer has read every other architecture too.
+   */
+  const askAiContext = React.useMemo(() => {
+    if (workspacePanelOpen) {
       /*
-       * Gated on the extension as well as the instruction.
+       * Checked first, not last. The builder panel covers the page, so while it
+       * is open it is what the reader is looking at, whatever is still selected
+       * behind it.
        *
-       * Not on instructionExpandOpen: that flag is only true for the expanded
-       * encoding modal, so clicking ADD inside RV32I never satisfied it and the
-       * question fell through to the extension.
+       * Never auto-submitted, and never a list of ids.
        *
-       * But the instruction alone is not enough either. Closing the details
-       * panel clears selectedExt and leaves selectedInstruction set, so a
-       * reader who picked ADD, closed the panel and then opened the builder
-       * would be asked about ADD. An instruction is only meaningful inside the
-       * extension showing it, so both must be present.
+       * A full profile resolves to 78 extensions, and a wall of comma-separated
+       * acronyms matches no passage in any specification: the retriever lands
+       * on something generic like a title page. It is also a poor thing to send
+       * on someone's behalf, because a reader looking at a configuration has a
+       * specific worry in mind and it is rarely "summarise all of these".
+       *
+       * So this opens a sentence for them to finish rather than a question they
+       * did not ask.
        */
-      return `What does the ${selectedInstruction.mnemonic} instruction in ${selectedExt.id} do, and how is it encoded?`;
+      const from = seedProfile ? ` based on the ${seedProfile} profile` : '';
+      return { query: `I am configuring a RISC-V core${from}. `, submit: false };
+    }
+    if (selectedExt?.id && selectedInstruction?.mnemonic) {
+      // Both required: closing the panel clears selectedExt but leaves the
+      // instruction set, and an instruction is only meaningful inside the
+      // extension showing it.
+      return {
+        query: `How does the ${selectedInstruction.mnemonic} instruction work in the RISC-V ${selectedExt.id} extension?`,
+        submit: true,
+      };
     }
     if (selectedExt?.id) {
-      // `short` is the readable label ("Address-Generation Bitmanip"); `name`
-      // is usually just the id again, so it would read "Zba (Zba)".
-      const short =
-        selectedExt.short && selectedExt.short !== selectedExt.id ? ` (${selectedExt.short})` : '';
-      return `What does the ${selectedExt.id} extension${short} do, and what depends on it?`;
-    }
-    if (workspacePanelOpen) {
-      const picked = Array.from(workspaceIds || []);
-      return picked.length
-        ? `I am building a RISC-V ISA configuration with ${picked.join(', ')}. What should I know about combining these?`
-        : 'How do I choose a set of RISC-V extensions for a custom ISA configuration?';
+      return { query: `Explain the RISC-V ${selectedExt.id} extension.`, submit: true };
     }
     return null;
-  }, [instructionExpandOpen, selectedInstruction, selectedExt, workspacePanelOpen, workspaceIds]);
-
-  // Escape dismisses the Selected Details panel, matching the button's tooltip.
-  //
-  // Deliberately last in line: every dialog that can sit above the panel is
-  // checked first, so Escape closes the topmost thing rather than quietly
-  // clearing the selection underneath an open modal. Those dialogs each stop
-  // propagation on their own listener, but they are mounted conditionally and
-  // this one is not, so the guard is what keeps the ordering honest rather
-  // than relying on listener registration order.
-  React.useEffect(() => {
-    if (!selectedExt) return undefined;
-    const onKeyDown = (e) => {
-      if (e.key !== 'Escape') return;
-      if (
-        aboutOpen ||
-        encoderValidatorOpen ||
-        encodingMapOpen ||
-        instructionExpandOpen ||
-        compareOpen ||
-        quickExportOpen ||
-        profileMenuOpen ||
-        workspacePanelOpen
-      ) {
-        return;
-      }
-      setSelectedExt(null);
-      setSelectedInstruction(null);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    selectedExt,
-    aboutOpen,
-    encoderValidatorOpen,
-    encodingMapOpen,
-    instructionExpandOpen,
-    compareOpen,
-    quickExportOpen,
-    profileMenuOpen,
-    workspacePanelOpen,
-  ]);
+  }, [selectedInstruction, selectedExt, workspacePanelOpen, seedProfile]);
 
   const [quickExportIncludeInstr, setQuickExportIncludeInstr] = useState(true);
 
@@ -5348,7 +5332,7 @@ const RISCVExplorer = () => {
       />
 
       {/* ── Ask AI Launcher ── */}
-      <AskAiLauncher query={askAiQuery} />
+      <AskAiLauncher context={askAiContext} />
 
       {/* ── Workspace Notices Toast ── */}
       <div
