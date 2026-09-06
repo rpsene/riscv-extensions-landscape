@@ -1,9 +1,15 @@
 name: Sync UDB Extensions
 
 on:
-  # Run every Monday at 06:00 UTC
+  # Run daily at 06:00 UTC.
+  #
+  # Was weekly, which meant a UDB change could sit unreflected here for six days.
+  # Daily is safe rather than noisy: the pull request step is guarded on an
+  # actual diff, so a quiet day produces nothing at all, and create-pull-request
+  # reuses one branch, so consecutive days with drift update the same pull
+  # request instead of stacking new ones.
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 * * *'
 
   # Allow manual trigger from the Actions tab
   workflow_dispatch:
