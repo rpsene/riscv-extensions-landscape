@@ -191,6 +191,18 @@
           "match": "0xf",
           "mask": "0x707f"
         },
+        "FENCE.TSO": {
+          "encoding": "100000110011-----000-----0001111",
+          "variable_fields": [
+            "rs1",
+            "rd"
+          ],
+          "extension": [
+            "rv_i"
+          ],
+          "match": "0x8330000f",
+          "mask": "0xfff0707f"
+        },
         "JAL": {
           "encoding": "-------------------------1101111",
           "variable_fields": [
@@ -924,6 +936,18 @@
           "match": "0xf",
           "mask": "0x707f"
         },
+        "FENCE.TSO": {
+          "encoding": "100000110011-----000-----0001111",
+          "variable_fields": [
+            "rs1",
+            "rd"
+          ],
+          "extension": [
+            "rv_i"
+          ],
+          "match": "0x8330000f",
+          "mask": "0xfff0707f"
+        },
         "JAL": {
           "encoding": "-------------------------1101111",
           "variable_fields": [
@@ -1420,6 +1444,18 @@
           ],
           "match": "0xf",
           "mask": "0x707f"
+        },
+        "FENCE.TSO": {
+          "encoding": "100000110011-----000-----0001111",
+          "variable_fields": [
+            "rs1",
+            "rd"
+          ],
+          "extension": [
+            "rv_i"
+          ],
+          "match": "0x8330000f",
+          "mask": "0xfff0707f"
         },
         "JAL": {
           "encoding": "-------------------------1101111",
@@ -2151,6 +2187,18 @@
           ],
           "match": "0xf",
           "mask": "0x707f"
+        },
+        "FENCE.TSO": {
+          "encoding": "100000110011-----000-----0001111",
+          "variable_fields": [
+            "rs1",
+            "rd"
+          ],
+          "extension": [
+            "rv_i"
+          ],
+          "match": "0x8330000f",
+          "mask": "0xfff0707f"
         },
         "JAL": {
           "encoding": "-------------------------1101111",
@@ -2928,6 +2976,18 @@
           "match": "0x20006033",
           "mask": "0xfe00707f"
         },
+        "ZEXT.H": {
+          "encoding": "000010000000-----100-----0111011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv64_zbb"
+          ],
+          "match": "0x800403b",
+          "mask": "0xfff0707f"
+        },
         "CLZW": {
           "encoding": "011000000000-----001-----0011011",
           "variable_fields": [
@@ -3060,18 +3120,6 @@
           ],
           "match": "0x40007033",
           "mask": "0xfe00707f"
-        },
-        "ZEXT.H": {
-          "encoding": "000010000000-----100-----0110011",
-          "variable_fields": [
-            "rd",
-            "rs1"
-          ],
-          "extension": [
-            "rv_zbb"
-          ],
-          "match": "0x8004033",
-          "mask": "0xfff0707f"
         },
         "CLZ": {
           "encoding": "011000000000-----001-----0010011",
@@ -3263,6 +3311,18 @@
             "rv_zbb"
           ],
           "match": "0x28705013",
+          "mask": "0xfff0707f"
+        },
+        "ZEXT.H.RV32": {
+          "encoding": "000010000000-----100-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv32_zbb"
+          ],
+          "match": "0x8004033",
           "mask": "0xfff0707f"
         },
         "BCLRI": {
@@ -16080,11 +16140,24 @@
       "short": "Basic Bitmanip",
       "tags": [
         "rv64_zbb",
-        "rv_zbb"
+        "rv_zbb",
+        "rv32_zbb"
       ],
       "desc": "Common bit and word operations such as count leading zeros, population count, min/max, rotate and sign extend.",
       "use": "Bit counting, min/max and byte swapping",
       "instructions": {
+        "ZEXT.H": {
+          "encoding": "000010000000-----100-----0111011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv64_zbb"
+          ],
+          "match": "0x800403b",
+          "mask": "0xfff0707f"
+        },
         "CLZW": {
           "encoding": "011000000000-----001-----0011011",
           "variable_fields": [
@@ -16217,18 +16290,6 @@
           ],
           "match": "0x40007033",
           "mask": "0xfe00707f"
-        },
-        "ZEXT.H": {
-          "encoding": "000010000000-----100-----0110011",
-          "variable_fields": [
-            "rd",
-            "rs1"
-          ],
-          "extension": [
-            "rv_zbb"
-          ],
-          "match": "0x8004033",
-          "mask": "0xfff0707f"
         },
         "CLZ": {
           "encoding": "011000000000-----001-----0010011",
@@ -16420,6 +16481,18 @@
             "rv_zbb"
           ],
           "match": "0x28705013",
+          "mask": "0xfff0707f"
+        },
+        "ZEXT.H.RV32": {
+          "encoding": "000010000000-----100-----0110011",
+          "variable_fields": [
+            "rd",
+            "rs1"
+          ],
+          "extension": [
+            "rv32_zbb"
+          ],
+          "match": "0x8004033",
           "mask": "0xfff0707f"
         }
       },
@@ -23150,6 +23223,17 @@
           ],
           "match": "0x4800302f",
           "mask": "0xf800707f"
+        },
+        "SSRDP": {
+          "encoding": "11001101110000000100-----1110011",
+          "variable_fields": [
+            "rd_n0"
+          ],
+          "extension": [
+            "rv_zicfiss"
+          ],
+          "match": "0xcdc04073",
+          "mask": "0xfffff07f"
         },
         "SSAMOSWAP.W": {
           "encoding": "01001------------010-----0101111",
