@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Network,
   Activity,
+  AreaChart,
   BookOpen,
   AlertTriangle,
   CheckCircle2,
@@ -79,6 +80,7 @@ import { PROFILES } from './profiles.js';
 import PROFILE_OPTIONAL from './profile-optional.json';
 import { buildIsaConfigYaml } from './exportUtils.js';
 import AskAiLauncher from './AskAiLauncher.jsx';
+import ExtensionEvolution from './ExtensionEvolution.jsx';
 
 // Ids the catalog can actually render. The dependency graph carries a few nodes
 // the catalog does not (UDB's S requires Sm, for which we have no entry), and
@@ -575,6 +577,8 @@ const RISCVExplorer = () => {
   // cost three lines of vertical space above the fold to say something a
   // returning visitor already knows). The trigger keeps it one click away.
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [evolutionOpen, setEvolutionOpen] = useState(false);
+  const evolutionTriggerRef = React.useRef(null);
   const aboutTriggerRef = React.useRef(null);
   const [encodingMapOpen, setEncodingMapOpen] = useState(false);
   const [encoderValidatorInput, setEncoderValidatorInput] = useState({
@@ -609,6 +613,24 @@ const RISCVExplorer = () => {
       aboutTriggerRef.current?.focus();
     };
   }, [aboutOpen]);
+
+  // Evolution panel: same shape as the About dialog above. It holds a slider
+  // and 219 buttons, but they are all inside the dialog, so Escape plus
+  // returning focus to the trigger is the whole contract.
+  React.useEffect(() => {
+    if (!evolutionOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setEvolutionOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      evolutionTriggerRef.current?.focus();
+    };
+  }, [evolutionOpen]);
 
   // Expanded instruction modal: focus trap and Escape, in one listener.
   //
@@ -2123,6 +2145,25 @@ const RISCVExplorer = () => {
                       {label !== 'Volumes' && <span className="mx-1 opacity-50">&middot;</span>}
                     </span>
                   ))}
+
+                  {/* Before About, because it answers the same question one
+                      step earlier: not "what is this tool" but "what is the
+                      thing it catalogues, and how did it get here". */}
+                  <button
+                    type="button"
+                    ref={evolutionTriggerRef}
+                    onClick={() => setEvolutionOpen(true)}
+                    className="riscv-btn tooltip-wide tooltip-bottom-right ml-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap"
+                    aria-haspopup="dialog"
+                    data-tooltip="Watch the ISA grow: a cumulative timeline of all 219 catalogued extensions, banded by family. Click any dot to open that extension."
+                  >
+                    {/* An axis under a filled, rising mass -- which is what the
+                        panel actually draws. It was lucide's Activity, a
+                        heart-rate trace, which said nothing about growth and was
+                        already in use elsewhere in this file. */}
+                    <AreaChart size={12} />
+                    Evolution
+                  </button>
 
                   {/* Sits between the counts and Report an issue: the three
                       things a first-time visitor wants from the header row are
@@ -4299,6 +4340,71 @@ const RISCVExplorer = () => {
         expandDeps={compareExpandDeps}
         onToggleExpandDeps={setCompareExpandDeps}
       />
+
+      {evolutionOpen && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="absolute inset-0"
+            style={{ background: 'rgba(7,7,14,0.85)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setEvolutionOpen(false)}
+            role="presentation"
+          />
+
+          <div className="absolute inset-0 p-3 md:p-6 flex items-start justify-center overflow-y-auto">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="evolution-title"
+              className="animate-scale-in w-full max-w-6xl riscv-card overflow-hidden"
+              style={{ boxShadow: '0 0 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(139,124,248,0.15)' }}
+            >
+              <div
+                className="p-4 flex items-start justify-between gap-3"
+                style={{ borderBottom: '1px solid var(--riscv-border)' }}
+              >
+                <div>
+                  <h3
+                    id="evolution-title"
+                    className="text-[13px] font-semibold uppercase tracking-widest"
+                    style={{ color: 'var(--riscv-text-2)' }}
+                  >
+                    How the ISA was built
+                  </h3>
+                  <p className="text-[12px] mt-1" style={{ color: 'var(--riscv-text-3)' }}>
+                    How fast the ISA grew, and when each of the 219 catalogued extensions arrived.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEvolutionOpen(false)}
+                  aria-label="Close the evolution panel"
+                  title="Close (Esc)"
+                  className="p-1 rounded-md transition-colors riscv-panel-dismiss"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-4">
+                <ExtensionEvolution
+                  catalog={extensions}
+                  onSelect={(id) => {
+                    const found = Object.values(extensions)
+                      .flat()
+                      .find((e) => e && e.id === id);
+                    if (found) {
+                      handleSelectExt(found);
+                      // Close on pick: the reader asked for that extension, and
+                      // the details panel is behind this dialog.
+                      setEvolutionOpen(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {aboutOpen && (
         <div className="fixed inset-0 z-50">
