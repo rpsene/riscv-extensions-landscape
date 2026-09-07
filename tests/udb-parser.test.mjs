@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parseUpstream, EXTENSION_ALIASES } from '../scripts/check-udb-completeness.mjs';
+import {
+  parseUpstream,
+  parseVariables,
+  applyNotConstraints,
+  EXTENSION_ALIASES,
+} from '../scripts/check-udb-completeness.mjs';
 
 /*
  * The parser, against committed fixtures.
@@ -122,4 +127,69 @@ test('the alias map is exported and covers upstream bare I', () => {
 
 test('parseUpstream throws on a directory that is not a checkout', () => {
   assert.throws(() => parseUpstream(path.join(here, 'fixtures', 'nope')));
+});
+
+// ── `not:` constraints ─────────────────────────────────────────────────────
+
+test('a not: list leaving one legal value pins the field', () => {
+  /*
+   * The bug this fixes. unified-db can constrain a field by exclusion rather
+   * than by fixing bits in the match string: fcvtmod.w.d shows rm as dashes and
+   * carries not: [0,2,3,4,5,6,7], which leaves only 1 (RTZ). Reading the match
+   * string alone reported it as free, and this catalogue -- which pins it
+   * correctly -- was flagged as disagreeing with upstream.
+   */
+  const p = inst('PINNEDBYNOT');
+  assert.ok(p, 'the fixture must parse');
+  const RM = 0x7n << 12n;
+  assert.equal(p.mask & RM, RM, 'bits 14-12 must be fixed');
+  assert.equal((p.match >> 12n) & 0x7n, 1n, 'to the single remaining value, 1');
+});
+
+test('a not: list that merely narrows leaves the bits free, and says so', () => {
+  // "any value except these four" cannot be said with a match and a mask.
+  // Flattening it would invent a constraint upstream did not state.
+  const n = inst('NARROWEDBYNOT');
+  const RM = 0x7n << 12n;
+  assert.equal(n.mask & RM, 0n, 'bits 14-12 stay free');
+  assert.deepEqual(n.narrowedFields, [{ field: 'tt', remaining: 4 }]);
+});
+
+test('an instruction with no not: constraints reports none narrowed', () => {
+  assert.deepEqual(inst('SIMPLE').narrowedFields, []);
+});
+
+test('applyNotConstraints is a pure function over match and mask', () => {
+  const base = { match: 0n, mask: 0n };
+  const pinned = applyNotConstraints(base, [
+    { name: 'f', hi: 14, lo: 12, not: [0, 2, 3, 4, 5, 6, 7] },
+  ]);
+  assert.equal(pinned.mask, 0x7n << 12n);
+  assert.equal(pinned.match, 1n << 12n);
+  assert.deepEqual(pinned.narrowed, []);
+
+  const untouched = applyNotConstraints(base, [{ name: 'f', hi: 14, lo: 12, not: [] }]);
+  assert.equal(untouched.mask, 0n, 'an empty not: changes nothing');
+
+  const narrowed = applyNotConstraints(base, [{ name: 'f', hi: 14, lo: 12, not: [0, 1] }]);
+  assert.equal(narrowed.mask, 0n, 'six values remain, so nothing can be pinned');
+  assert.deepEqual(narrowed.narrowed, [{ field: 'f', remaining: 6 }]);
+});
+
+test('parseVariables reads a multi-line not: list', () => {
+  // cm.jalt's exclusion list wraps across lines upstream.
+  const vars = parseVariables(`
+encoding:
+  match: 0000000----------000-----0001011
+  variables:
+    - name: index
+      location: 19-15
+      not: [ 0, 1, 2, 3,
+             4, 5 ]
+    - name: xd
+      location: 11-7
+`);
+  assert.equal(vars.length, 2);
+  assert.deepEqual(vars[0].not, [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(vars[1].not, []);
 });
