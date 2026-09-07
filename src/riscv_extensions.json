@@ -18475,6 +18475,17 @@
       "use": "Switch/jumptable compression",
       "url": "https://docs.riscv.org/reference/isa/unpriv/zc.html",
       "instructions": {
+        "CM.JT": {
+          "encoding": "----------------101000000-----10",
+          "variable_fields": [
+            "c_index"
+          ],
+          "extension": [
+            "rv_zcmt"
+          ],
+          "match": "0xa002",
+          "mask": "0xff83"
+        },
         "CM.JALT": {
           "encoding": "----------------101000--------10",
           "variable_fields": [

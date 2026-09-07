@@ -190,6 +190,35 @@ test('Zbb carries both width-specific encodings of ZEXT.H', () => {
   );
 });
 
+test('Zcmt separates CM.JT from CM.JALT', () => {
+  // riscv-opcodes carries one row, cm.jalt, whose 8-bit index spans 0-255. The
+  // Zcmt spec defines two instructions on that range: CM.JT for index < 32,
+  // which jumps, and CM.JALT for index >= 32, which jumps and links. Carrying
+  // only the wide row meant every index below 32 decoded as a linking jump.
+  //
+  // CM.JT pins index[7:5] to zero, so its mask is strictly narrower and a
+  // decoder must prefer it. CM.JALT stays wide because "index >= 32" is not
+  // expressible as a mask, the same reason C.MV stays wide against C.JR and
+  // C.ADD against C.JALR and C.EBREAK.
+  const zcmt = entries.find((e) => e.id === 'Zcmt');
+  assert.ok(zcmt, 'Zcmt is missing from the catalogue');
+  const jt = zcmt.instructions['CM.JT'];
+  const jalt = zcmt.instructions['CM.JALT'];
+  assert.ok(jt, 'Zcmt must carry CM.JT');
+  assert.ok(jalt, 'Zcmt must carry CM.JALT');
+
+  const jtMask = BigInt(jt.mask);
+  const jaltMask = BigInt(jalt.mask);
+  assert.equal(BigInt(jt.match), BigInt(jalt.match), 'both decode from the same base');
+  assert.equal(jtMask & jaltMask, jaltMask, 'CM.JT must be at least as constrained');
+  assert.notEqual(jtMask, jaltMask, 'CM.JT must be strictly narrower, not a duplicate');
+
+  const indexHigh = 0x380n; // index[7:5], bits 9-7 of the halfword
+  assert.equal(jtMask & indexHigh, indexHigh, 'CM.JT must fix index[7:5]');
+  assert.equal(BigInt(jt.match) & indexHigh, 0n, 'CM.JT is the index < 32 half');
+  assert.equal(jaltMask & indexHigh, 0n, 'CM.JALT must leave index[7:5] free');
+});
+
 test('extensions that define no new opcodes carry their pseudo-instructions', () => {
   // Zihintpause, Zihintntl, Zicntr, Zicfilp and Zicbop introduce no encodings of
   // their own; they name specific encodings of existing instructions. They read
