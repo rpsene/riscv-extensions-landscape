@@ -242,6 +242,20 @@
       "requires": [],
       "verified": "udb"
     },
+    "Shlcofideleg": {
+      "requires": [
+        {
+          "ext": "H",
+          "src": "udb",
+          "ref": "Shlcofideleg.yaml requirements.extension"
+        },
+        {
+          "ext": "Sscofpmf",
+          "src": "udb",
+          "ref": "Shlcofideleg.yaml requirements.extension"
+        }
+      ]
+    },
     "Shtvala": {
       "requires": [
         {

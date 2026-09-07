@@ -45,6 +45,7 @@ For live-reload development: `npm run dev` (serves on :8080 with source maps).
 | `npm run graph:check -- <path-to-udb>` | Check dependency graph vs UDB |
 | `npm run links:check` | Verify doc URLs resolve on docs.riscv.org |
 | `npm run opcodes:check -- <path-to-riscv-opcodes>` | Report instruction-encoding drift |
+| `npm run udb:check -- <path-to-udb>` | Report ratified extensions/instructions we lack |
 | `npm run deploy` | Manual publish of `dist/` to `gh-pages` (normally automatic) |
 
 There is no separate typecheck (no TypeScript).
@@ -115,6 +116,12 @@ Then `npm run sync` and `npm test && npm run build`.
   entries upstream lacks (the 56 `vlseg` segment loads; expanded MOP/C.MOP). A
   regenerate would delete them. `npm run opcodes:check` only *reports* drift and
   leaves the call to a human — never auto-apply it.
+- **The daily UDB sync cannot ADD an extension.** `scripts/sync_udb_extensions.cjs`
+  iterates the catalogue, so it enriches entries that already exist and is blind
+  to anything upstream has that we do not. `npm run udb:check` watches that
+  direction, and a weekly workflow files the result as one issue it keeps
+  updated. Adding an extension stays a human decision: it needs a description, a
+  use case, a doc link and a graph node, none of which UDB supplies.
 - **`dist/` and `node_modules/` are generated** (dist is git-ignored / rebuilt;
   eslint ignores both). Don't hand-edit `dist/`.
 - **`gh-pages` branch is machine-published** by CI on every push to `main`.
