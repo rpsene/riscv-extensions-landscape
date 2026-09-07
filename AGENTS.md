@@ -42,6 +42,7 @@ For live-reload development: `npm run dev` (serves on :8080 with source maps).
 | `npm run sync` | Regenerate instruction data from `src/instr_dict.json` |
 | `npm run sync:check` | Check instruction drift, write nothing (`sync --strict`) |
 | `npm run sync:udb` | Sync extension metadata from riscv-unified-db |
+| `npm run sync:params -- <path-to-udb>` | Regenerate `src/isa-params.json` (UDB parameter definitions) |
 | `npm run graph:check -- <path-to-udb>` | Check dependency graph vs UDB |
 | `npm run links:check` | Verify doc URLs resolve on docs.riscv.org |
 | `npm run opcodes:check -- <path-to-riscv-opcodes>` | Report instruction-encoding drift |
@@ -71,6 +72,7 @@ src/
   --- data (the source of truth) ---
   riscv_extensions.json       # extension catalogue + per-extension instruction encodings
   isa-dependency-graph.json   # dependencies/conflicts/params, one citation per edge
+  isa-params.json             # UDB parameter DEFINITIONS, generated (see gotchas)
   instr_dict.json             # instruction encodings, HAND-MAINTAINED (see gotchas)
 scripts/                      # sync/seed/check tooling (.mjs / .cjs)
 tests/                        # node:test suites (*.test.mjs)
@@ -122,6 +124,18 @@ Then `npm run sync` and `npm test && npm run build`.
   direction, and a weekly workflow files the result as one issue it keeps
   updated. Adding an extension stays a human decision: it needs a description, a
   use case, a doc link and a graph node, none of which UDB supplies.
+- **`src/isa-params.json` is definitions, not values.** It says what a parameter
+  IS: type, admissible values, and the conditions under which it exists. It
+  chooses nothing. Values come from two other places: the constraints in
+  `isa-dependency-graph.json` (resolved by `resolveParams`) and the user's own
+  picks (`paramChoices`). `definedBy` is stored as UDB writes it, a predicate
+  tree, because 23 of the 228 parameters are gated on another PARAMETER'S value
+  rather than on an extension; flattening it to one owner per parameter loses
+  that distinction silently. Regenerate with `npm run sync:params`, never by hand.
+- **The UDB export's `UDB_REQUIRED_PARAMS` floor is deliberately not derived.**
+  All 15 are defined by `Sm` upstream, but no graph node requires `Sm`, so a
+  selection-derived list is empty for a bare RV32I and the export would silently
+  drop every param riscv-arch-test needs. `tests/export.test.mjs` guards this.
 - **`dist/` and `node_modules/` are generated** (dist is git-ignored / rebuilt;
   eslint ignores both). Don't hand-edit `dist/`.
 - **`gh-pages` branch is machine-published** by CI on every push to `main`.
