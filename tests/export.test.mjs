@@ -381,3 +381,41 @@ test('no exported param hint leads with an upstream placeholder', () => {
     `placeholder names leaked into the export:\n  ${leaked.join('\n  ')}`,
   );
 });
+
+test('a UDB export never emits the same param key twice', () => {
+  // YAML forbids duplicate keys, so this is invalidity rather than untidiness.
+  // No graph constraint currently names one of the hardcoded floor params, which
+  // is exactly why it needs a test: the day one does, the export breaks and
+  // nothing else would notice.
+  for (const selection of [['RV32I'], ['RV64I'], RVA23]) {
+    const yaml = buildIsaConfigYaml(selection, ALL, { format: 'udb' }).yaml;
+    const keys = yaml
+      .split('\n')
+      .map((l) => /^ {2}([A-Z][A-Z0-9_]*):/.exec(l))
+      .filter(Boolean)
+      .map((m) => m[1]);
+    const seen = new Set();
+    const dupes = keys.filter((k) => (seen.has(k) ? true : (seen.add(k), false)));
+    assert.deepEqual(dupes, [], `duplicate keys for ${selection.join('+')}: ${dupes.join(', ')}`);
+  }
+});
+
+test('a UDB export keeps the oneOf value the user picked', () => {
+  // The builder offers these as buttons and the landscape export has always
+  // recorded the pick. Emitting TODO here regardless threw the choice away and
+  // asked for it again in a text editor.
+  const sel = ['RV64I', 'Ssube'];
+  const withChoice = buildIsaConfigYaml(sel, ALL, {
+    format: 'udb',
+    paramChoices: { U_MODE_ENDIANNESS: 'big' },
+  }).yaml;
+  const without = buildIsaConfigYaml(sel, ALL, { format: 'udb' }).yaml;
+
+  const line = withChoice.split('\n').find((l) => l.trim().startsWith('U_MODE_ENDIANNESS:'));
+  assert.ok(line, 'U_MODE_ENDIANNESS must appear');
+  assert.match(line, /U_MODE_ENDIANNESS: "big"/, `the pick should be the value, got: ${line}`);
+  assert.doesNotMatch(line, /TODO/, 'a chosen value is not a TODO');
+  // And without a choice it stays a TODO, so the test cannot pass vacuously.
+  const bare = without.split('\n').find((l) => l.trim().startsWith('U_MODE_ENDIANNESS:'));
+  assert.match(bare, /TODO/, `unchosen should still be a TODO, got: ${bare}`);
+});

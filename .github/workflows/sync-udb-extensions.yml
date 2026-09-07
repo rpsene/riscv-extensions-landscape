@@ -78,13 +78,19 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet src/riscv_extensions.json src/isa-dependency-graph.json; then
+          # All three synced files, not just the first two. A UDB release that
+          # touches only spec/std/isa/param/ changes src/isa-params.json and
+          # nothing else; left out of this list, that sync would run, write the
+          # file, find "no changes", open no pull request, and throw the update
+          # away with the runner. Silently, once per day.
+          SYNCED="src/riscv_extensions.json src/isa-dependency-graph.json src/isa-params.json"
+          if git diff --quiet $SYNCED; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No new extension data in UDB."
+            echo "No new extension or parameter data in UDB."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "New extension data found — opening PR."
-            git diff --stat src/riscv_extensions.json src/isa-dependency-graph.json
+            echo "New data found — opening PR."
+            git diff --stat $SYNCED
           fi
 
       - name: Create Pull Request

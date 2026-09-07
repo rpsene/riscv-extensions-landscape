@@ -352,7 +352,16 @@ export function buildIsaConfigYaml(selectedIds, allExts, options = {}) {
           u.push(`  ${prm.name}:   # TODO a list including ${must}; ${why}`);
         } else if (prm.kind === 'oneOf') {
           const allowed = [].concat(prm.value).join(', ');
-          u.push(`  ${prm.name}:   # TODO one of [${allowed}]; ${why}`);
+          // The builder lets a user pick one of these, and the landscape export
+          // has always recorded that pick. Emitting TODO here regardless threw
+          // the choice away and asked them to make it again in a text editor.
+          if (Object.prototype.hasOwnProperty.call(paramChoices, prm.name)) {
+            const picked = paramChoices[prm.name];
+            const rendered = typeof picked === 'string' ? JSON.stringify(picked) : picked;
+            u.push(`  ${prm.name}: ${rendered}   # your choice of [${allowed}]; ${why}`);
+          } else {
+            u.push(`  ${prm.name}:   # TODO one of [${allowed}]; ${why}`);
+          }
         } else {
           const allowed = [].concat(prm.value).join(', ');
           u.push(`  ${prm.name}:   # TODO ${prm.kind}: ${allowed}; ${why}`);
@@ -364,7 +373,13 @@ export function buildIsaConfigYaml(selectedIds, allExts, options = {}) {
     u.push(`  # TODO — implementation choices. No extension list implies these, and`);
     u.push(`  # they are what makes the difference between a config that reflects your`);
     u.push(`  # core and one that merely parses. Values come from your design document.`);
+    // Latent rather than live: no graph constraint currently names one of the
+    // floor params. If one ever does, the same key would be emitted in both the
+    // CONSTRAINED and TODO blocks, and duplicate keys make the document invalid
+    // YAML rather than merely untidy. Cheaper to make impossible than to detect.
+    const alreadyEmitted = new Set(constrained.map((prm) => prm.name));
     for (const [name, fallback] of UDB_REQUIRED_PARAMS) {
+      if (alreadyEmitted.has(name)) continue;
       const def = parameterDefinition(name);
       const hint = def ? schemaSummary(def.schema) : fallback;
       const label = def?.long_name ? `${def.long_name}; ` : '';
