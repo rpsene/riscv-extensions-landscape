@@ -31,6 +31,88 @@ import { compareAgainstUpstream } from '../src/completeness.js';
  * ratified gaps. Real data found all three; tests found none, because there was
  * nothing importable to test. Now there is.
  */
+/**
+ * Fold unified-db `not:` constraints into a match/mask pair.
+ *
+ * A variable field can be narrowed by excluding values rather than by fixing
+ * bits in the match string:
+ *
+ *   - name: rm
+ *     location: 14-12
+ *     not: [0, 2, 3, 4, 5, 6, 7]
+ *
+ * That leaves exactly one legal value, so `rm` is pinned as surely as if the
+ * match string had spelled it out. Reading only the match string missed this
+ * and reported FCVTMOD.W.D as an encoding upstream leaves free, when upstream
+ * constrains it precisely and this catalogue agrees.
+ *
+ * Only a field left with ONE legal value can be folded in. The other twelve
+ * uses upstream merely narrow a field -- `ld` and `sd` excluding odd registers,
+ * `cm.pop` excluding low counts -- and "any value except these four" cannot be
+ * said with a match and a mask. Those are returned as `narrowed` so a caller
+ * can report the limit rather than pretend it does not exist.
+ */
+export function applyNotConstraints({ match, mask }, variables) {
+  let m = match;
+  let k = mask;
+  const narrowed = [];
+
+  for (const v of variables) {
+    if (!v.not || v.not.length === 0) continue;
+    const width = v.hi - v.lo + 1;
+    const total = 1 << width;
+    const excluded = new Set(v.not);
+    if (excluded.size !== total - 1) {
+      narrowed.push({ field: v.name, remaining: total - excluded.size });
+      continue;
+    }
+    let only = null;
+    for (let candidate = 0; candidate < total; candidate += 1) {
+      if (!excluded.has(candidate)) only = candidate;
+    }
+    if (only === null) continue;
+    const fieldMask = ((1n << BigInt(width)) - 1n) << BigInt(v.lo);
+    k |= fieldMask;
+    m = (m & ~fieldMask) | (BigInt(only) << BigInt(v.lo));
+  }
+
+  return { match: m, mask: k, narrowed };
+}
+
+/** The `variables:` block of an encoding: name, bit range, and any `not:` list. */
+export function parseVariables(text) {
+  /*
+   * Capture everything after `variables:` and let the item pattern below decide
+   * what counts, rather than trying to find where the block ends.
+   *
+   * The tempting lookahead is /(?=^\S|$)/m, and it is wrong for the second time
+   * today: in multiline mode `$` is the end of the FIRST line, so the group
+   * captures nothing. definedBy had the identical bug. An item only matches
+   * when `name:` is followed by `location:`, which no later key in these files
+   * produces, so the loose capture is safe.
+   */
+  const block = text.match(/^\s*variables:\n([\s\S]*)/m);
+  if (!block) return [];
+  const out = [];
+  const re = /-\s*name:\s*(\w+)\s*\n\s*location:\s*(\d+)-(\d+)([\s\S]*?)(?=\n\s*-\s*name:|$)/g;
+  for (const m of block[1].matchAll(re)) {
+    const notList = m[4].match(/not:\s*\[([\s\S]*?)\]/);
+    out.push({
+      name: m[1],
+      hi: Number(m[2]),
+      lo: Number(m[3]),
+      not: notList
+        ? notList[1]
+            .split(',')
+            .map((x) => x.trim())
+            .filter((x) => /^\d+$/.test(x))
+            .map(Number)
+        : [],
+    });
+  }
+  return out;
+}
+
 export function parseUpstream(specDir) {
   const readDefinedBy = (text) => {
     /*
@@ -86,11 +168,15 @@ export function parseUpstream(specDir) {
           mask |= 1n;
         }
       }
+      // Fold in any `not:` that pins a field to a single value.
+      const folded = applyNotConstraints({ match, mask }, parseVariables(text));
+
       const owners = readDefinedBy(text);
       instructions.push({
         mnemonic: (name ? name[1] : file.replace(/\.yaml$/, '')).toUpperCase(),
-        match,
-        mask,
+        match: folded.match,
+        mask: folded.mask,
+        narrowedFields: folded.narrowed,
         // Fall back to the directory only when the file names no owner. An
         // empty array is truthy, so `|| [dir]` silently kept the empty list.
         definedBy: owners.length ? owners : [dir],
