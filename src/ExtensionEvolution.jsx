@@ -285,11 +285,11 @@ export default function ExtensionEvolution({ catalog, onSelect }) {
         </div>
 
         {/*
-         * Off the axis on purpose. These 56 are real catalogued extensions and
-         * belong in the picture -- leaving them out showed 163 of 219 and passed
-         * a subset off as the whole -- but the catalogue records no date for
-         * them, and placing them anywhere on the timeline would invent one. So
-         * they sit below it, behind a rule, labelled for what they are.
+         * Off the axis on purpose. These are real catalogued extensions and belong
+         * in the picture -- leaving them out charted a subset while presenting it
+         * as the whole -- but the catalogue records no date for them, and placing
+         * them anywhere on the timeline would invent one. So they sit below it,
+         * behind a rule, labelled for what they are.
          */}
         <div className="riscv-evo__nodate">
           <span className="riscv-evo__nodatelabel">

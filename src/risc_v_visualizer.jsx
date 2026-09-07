@@ -2155,7 +2155,7 @@ const RISCVExplorer = () => {
                     onClick={() => setEvolutionOpen(true)}
                     className="riscv-btn tooltip-wide tooltip-bottom-right ml-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap"
                     aria-haspopup="dialog"
-                    data-tooltip="Watch the ISA grow: a cumulative timeline of all 219 catalogued extensions, banded by family. Click any dot to open that extension."
+                    data-tooltip={`Watch the ISA grow: a cumulative timeline of all ${allExtensionsFlat.length} catalogued extensions, banded by family. Click any dot to open that extension.`}
                   >
                     {/* An axis under a filled, rising mass -- which is what the
                         panel actually draws. It was lucide's Activity, a
@@ -4371,7 +4371,7 @@ const RISCVExplorer = () => {
                     How the ISA was built
                   </h3>
                   <p className="text-[12px] mt-1" style={{ color: 'var(--riscv-text-3)' }}>
-                    How fast the ISA grew, and when each of the 219 catalogued extensions arrived.
+                    {`How fast the ISA grew, and when each of the ${allExtensionsFlat.length} catalogued extensions arrived.`}
                   </p>
                 </div>
                 <button
