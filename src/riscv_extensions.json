@@ -29302,6 +29302,22 @@
       "version": "1.0.0"
     },
     {
+      "id": "Shlcofideleg",
+      "name": "Shlcofideleg",
+      "short": "Counter Overflow Delegation",
+      "tags": [],
+      "desc": "Makes hideleg bit 13 writable, so a hypervisor can delegate local counter overflow interrupts to VS-mode.",
+      "use": "Delegating counter overflow to a guest",
+      "url": "https://github.com/riscv/riscv-isa-manual",
+      "instructions": {},
+      "long_name": "Hypervisor local counter overflow interrupt delegation",
+      "type": "privileged",
+      "state": "ratified",
+      "ratification_date": "2024-10",
+      "behavior": "When implemented, bit 13 of `hideleg` is writable, which lets Local Counter Overflow Interrupts (LCOFIs) be delegated to VS-mode.\n\n[NOTE]\nRequires H and Sscofpmf: the interrupt it delegates is the one Sscofpmf defines, and the register it makes writable belongs to H.",
+      "version": "1.0.0"
+    },
+    {
       "id": "Ssqosid",
       "name": "Ssqosid",
       "short": "QoS Identifiers",

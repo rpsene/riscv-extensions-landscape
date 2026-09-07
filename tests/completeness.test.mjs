@@ -365,30 +365,46 @@ test('unratified upstream work is not a completeness gap', () => {
   // The correction that mattered most. Zilx is state `development` in
   // unified-db, and the first version of this gate reported it plus nineteen
   // instructions as missing. Nobody is waiting on a draft.
+  /*
+   * Synthetic names on purpose. An earlier version used Shlcofideleg and Zilx,
+   * the real gaps at the time, and adding Shlcofideleg to the catalogue broke
+   * this test. A fixture that stops being a gap the moment someone fixes the
+   * gap is testing the data, not the logic.
+   */
   const upstream = {
-    extensions: ['Shlcofideleg', 'Zilx'],
+    extensions: ['Zratifiedmissing', 'Zdevelopmentmissing'],
     instructions: [
-      { mnemonic: 'LXD', match: 0x1000000bn, mask: 0xffffffffn, definedBy: ['Zilx'] },
-      { mnemonic: 'NOTREAL', match: 0x2000000bn, mask: 0xffffffffn, definedBy: ['Shlcofideleg'] },
+      {
+        mnemonic: 'DRAFTONLY',
+        match: 0x1000000bn,
+        mask: 0xffffffffn,
+        definedBy: ['Zdevelopmentmissing'],
+      },
+      {
+        mnemonic: 'RATIFIEDONLY',
+        match: 0x2000000bn,
+        mask: 0xffffffffn,
+        definedBy: ['Zratifiedmissing'],
+      },
     ],
   };
 
   const ratifiedOnly = compareAgainstUpstream(catalogue, upstream, {
     onlyRatified: true,
-    ratifiedExtensions: ['Shlcofideleg'],
+    ratifiedExtensions: ['Zratifiedmissing'],
   });
-  assert.deepEqual(ratifiedOnly.missingExtensions, ['Shlcofideleg'], 'only the ratified one');
+  assert.deepEqual(ratifiedOnly.missingExtensions, ['Zratifiedmissing'], 'only the ratified one');
   assert.deepEqual(
     ratifiedOnly.missingInstructions.map((m) => m.mnemonic),
-    ['NOTREAL'],
-    'LXD belongs to a development extension and is not a gap',
+    ['RATIFIEDONLY'],
+    'an instruction owned only by a development extension is not a gap',
   );
 
   const everything = compareAgainstUpstream(catalogue, upstream, {
     onlyRatified: false,
-    ratifiedExtensions: ['Shlcofideleg'],
+    ratifiedExtensions: ['Zratifiedmissing'],
   });
-  assert.deepEqual(everything.missingExtensions, ['Shlcofideleg', 'Zilx']);
+  assert.deepEqual(everything.missingExtensions, ['Zdevelopmentmissing', 'Zratifiedmissing']);
   assert.equal(everything.missingInstructions.length, 2, 'the wider view still shows both');
 });
 
@@ -410,14 +426,15 @@ test('an instruction counts as ratified if ANY of its owners is', () => {
 });
 
 test('ratification filtering is case-insensitive and defaults to off', () => {
-  const upstream = { extensions: ['Zvfofp4min'], instructions: [] };
+  // Synthetic, for the same reason as above.
+  const upstream = { extensions: ['Zsynthetic'], instructions: [] };
 
   const lower = compareAgainstUpstream(catalogue, upstream, {
     onlyRatified: true,
-    ratifiedExtensions: ['zvfofp4min'],
+    ratifiedExtensions: ['zsynthetic'],
   });
-  assert.deepEqual(lower.missingExtensions, ['Zvfofp4min'], 'case should not matter');
+  assert.deepEqual(lower.missingExtensions, ['Zsynthetic'], 'case should not matter');
 
   const off = compareAgainstUpstream(catalogue, upstream);
-  assert.deepEqual(off.missingExtensions, ['Zvfofp4min'], 'unfiltered by default');
+  assert.deepEqual(off.missingExtensions, ['Zsynthetic'], 'unfiltered by default');
 });
