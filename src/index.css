@@ -2133,36 +2133,68 @@ pre,
  * guide and the dots are revealed by the same moving edge: a dot becomes
  * visible exactly as the curve reaches its month.
  */
+/*
+ * Two mechanisms for one sweep, because no single one works everywhere.
+ *
+ * The SVG mass and guide are clipped by a <clipPath> applied through the SVG
+ * attribute, and the rect inside it is wiped with a transform. WebKit does not
+ * support the CSS clip-path property on SVG elements at all, so animating that
+ * silently did nothing on iOS: the curve appeared complete from the first frame
+ * while only the dots swept.
+ *
+ * The dot layer is an HTML element, where CSS clip-path is well supported, so it
+ * keeps the inset animation. Both run on the same duration, timing function and
+ * iteration count, which is what keeps them in lockstep.
+ */
+@keyframes riscv-evo-wipe {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @keyframes riscv-evo-sweep {
   from {
+    -webkit-clip-path: inset(0 100% 0 0);
     clip-path: inset(0 100% 0 0);
   }
   to {
+    -webkit-clip-path: inset(0 0 0 0);
     clip-path: inset(0 0 0 0);
   }
 }
 
-.riscv-evo__plot.is-sweeping .riscv-evo__mass,
-.riscv-evo__plot.is-sweeping .riscv-evo__line,
+/* fill-box so the wipe grows from the plot's own left edge, not the viewport's. */
+.riscv-evo__wipe {
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.riscv-evo__plot.is-sweeping .riscv-evo__wipe {
+  animation: riscv-evo-wipe 7s linear infinite;
+}
+
 .riscv-evo__plot.is-sweeping .riscv-evo__field {
   animation: riscv-evo-sweep 7s linear infinite;
 }
 
 /* Stopped means finished, not frozen mid-sweep. */
-.riscv-evo__plot:not(.is-sweeping) .riscv-evo__mass,
-.riscv-evo__plot:not(.is-sweeping) .riscv-evo__line,
 .riscv-evo__plot:not(.is-sweeping) .riscv-evo__field {
+  -webkit-clip-path: none;
   clip-path: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .riscv-evo__plot.is-sweeping .riscv-evo__mass,
-  .riscv-evo__plot.is-sweeping .riscv-evo__line,
-  .riscv-evo__plot.is-sweeping .riscv-evo__field {
-    animation: none;
-    clip-path: none;
-  }
-}
+/*
+ * Deliberately no prefers-reduced-motion rule here.
+ *
+ * Reduced motion suppresses the AUTOPLAY -- the component starts paused when the
+ * setting is on, so nothing moves unless asked. Killing the animation in CSS as
+ * well meant pressing Replay did nothing at all, which reads as a broken button
+ * rather than as a respected preference. Movement the reader explicitly asks for
+ * is the one kind reduced-motion is not meant to forbid.
+ */
 
 .riscv-evo__curve {
   display: block;

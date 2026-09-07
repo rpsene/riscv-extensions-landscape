@@ -205,7 +205,23 @@ export default function ExtensionEvolution({ catalog, onSelect }) {
               </g>
             ))}
 
-            <g className="riscv-evo__mass">
+            <defs>
+              {/*
+               * A real clipPath applied through the SVG *attribute*. WebKit does
+               * not implement the CSS clip-path property on SVG elements, so the
+               * stylesheet sweep animated the HTML dot layer and left the mass
+               * fully drawn from the first frame -- the animation looked broken
+               * on iOS while working in Chrome.
+               *
+               * The wipe rect is animated with a transform, which SVG supports
+               * everywhere, instead of an animated clip-path.
+               */}
+              <clipPath id="riscv-evo-reveal" clipPathUnits="userSpaceOnUse">
+                <rect className="riscv-evo__wipe" x={0} y={0} width={W} height={CURVE_H} />
+              </clipPath>
+            </defs>
+
+            <g className="riscv-evo__mass" clipPath="url(#riscv-evo-reveal)">
               {bands.bands.map((band) => (
                 <path
                   key={band.key}
