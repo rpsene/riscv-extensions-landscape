@@ -119,7 +119,23 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
      * real gaps.
      */
     extensionAliases = {},
+    /*
+     * Restrict the report to extensions upstream has ever ratified.
+     *
+     * unified-db carries drafts and in-development work alongside ratified
+     * material, and treating its presence as ratification over-reports badly:
+     * the first run of this gate called Zilx a gap, with nineteen instructions
+     * behind it, when Zilx is state `development` and nobody should be waiting
+     * on it. "Ever ratified" is the question the catalogue actually answers, so
+     * an extension counts if ANY of its versions reached ratified, even if a
+     * later one is frozen.
+     */
+    onlyRatified = false,
+    ratifiedExtensions = [],
   } = options;
+
+  const ratified = new Set(ratifiedExtensions.map((x) => x.toLowerCase()));
+  const isRatified = (id) => ratified.has(String(id).toLowerCase());
 
   const aliasesFor = (id) => {
     const mapped = extensionAliases[id] || extensionAliases[id.toLowerCase()];
@@ -144,7 +160,12 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
   const missingExtensions = (upstream.extensions || [])
     .filter((id) => !localIds.has(id.toLowerCase()))
     .filter((id) => !allowMissingExtensions.includes(id))
+    .filter((id) => !onlyRatified || isRatified(id))
     .sort();
+
+  // An instruction is only a ratified gap if something ratified defines it.
+  const upstreamIsRatified = (inst) =>
+    !onlyRatified || (inst.definedBy || []).some((owner) => isRatified(owner));
 
   const missingInstructions = [];
   const attributedDifferently = [];
@@ -154,6 +175,7 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
   for (const inst of upstream.instructions || []) {
     const mnemonic = inst.mnemonic.toUpperCase();
     if (allowMissingInstructions.includes(mnemonic)) continue;
+    if (!upstreamIsRatified(inst)) continue;
 
     /*
      * Only rows in an extension upstream attributes the instruction to are

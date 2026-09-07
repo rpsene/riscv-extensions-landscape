@@ -70,10 +70,20 @@ const readScalars = (file, keys) => {
   return out;
 };
 
-const extensions = fs
-  .readdirSync(path.join(specDir, 'ext'))
-  .filter((f) => f.endsWith('.yaml'))
-  .map((f) => f.replace(/\.yaml$/, ''));
+const extDir = path.join(specDir, 'ext');
+const extensions = [];
+const ratifiedExtensions = [];
+for (const file of fs.readdirSync(extDir).filter((f) => f.endsWith('.yaml'))) {
+  const id = file.replace(/\.yaml$/, '');
+  extensions.push(id);
+  /*
+   * "Ever ratified": an extension qualifies if ANY of its versions reached
+   * ratified, even where a later one is frozen. unified-db lists a state per
+   * version, so this reads them all rather than the first.
+   */
+  const text = fs.readFileSync(path.join(extDir, file), 'utf8');
+  if (/^\s*state:\s*ratified\s*$/m.test(text)) ratifiedExtensions.push(id);
+}
 
 const instructions = [];
 const instRoot = path.join(specDir, 'inst');
@@ -135,7 +145,15 @@ const EXTENSION_ALIASES = { I: ['RV32I', 'RV64I', 'RV32E', 'RV64E'] };
 const result = compareAgainstUpstream(
   catalogue,
   { extensions, instructions },
-  { extensionAliases: EXTENSION_ALIASES, allowMissingExtensions: Object.keys(EXTENSION_ALIASES) },
+  {
+    extensionAliases: EXTENSION_ALIASES,
+    allowMissingExtensions: Object.keys(EXTENSION_ALIASES),
+    // Default to the question the catalogue exists to answer. --all widens it
+    // to everything upstream carries, which is useful for seeing what is coming
+    // but is not a completeness failure.
+    onlyRatified: !process.argv.includes('--all'),
+    ratifiedExtensions,
+  },
 );
 
 if (asJson) {
@@ -149,7 +167,12 @@ const list = (rows, f) =>
     .map((s) => `    ${s}`)
     .join('\n');
 
-console.log(`unified-db: ${extensions.length} extensions, ${instructions.length} instructions`);
+const scope = process.argv.includes('--all') ? 'all upstream' : 'ratified only';
+console.log(
+  `unified-db: ${extensions.length} extensions ` +
+    `(${ratifiedExtensions.length} ever ratified), ${instructions.length} instructions`,
+);
+console.log(`scope: ${scope}   (pass --all to include draft and in-development work)`);
 console.log(`catalogue:  ${Object.values(catalogue).flat().filter(Boolean).length} extensions\n`);
 
 console.log(`missing extensions (${result.missingExtensions.length}):`);

@@ -358,3 +358,66 @@ test('extensionAliases map an upstream id onto the local ones', () => {
     'without the alias it is merely attributed elsewhere, never missing',
   );
 });
+
+// ── ratification state ─────────────────────────────────────────────────────
+
+test('unratified upstream work is not a completeness gap', () => {
+  // The correction that mattered most. Zilx is state `development` in
+  // unified-db, and the first version of this gate reported it plus nineteen
+  // instructions as missing. Nobody is waiting on a draft.
+  const upstream = {
+    extensions: ['Shlcofideleg', 'Zilx'],
+    instructions: [
+      { mnemonic: 'LXD', match: 0x1000000bn, mask: 0xffffffffn, definedBy: ['Zilx'] },
+      { mnemonic: 'NOTREAL', match: 0x2000000bn, mask: 0xffffffffn, definedBy: ['Shlcofideleg'] },
+    ],
+  };
+
+  const ratifiedOnly = compareAgainstUpstream(catalogue, upstream, {
+    onlyRatified: true,
+    ratifiedExtensions: ['Shlcofideleg'],
+  });
+  assert.deepEqual(ratifiedOnly.missingExtensions, ['Shlcofideleg'], 'only the ratified one');
+  assert.deepEqual(
+    ratifiedOnly.missingInstructions.map((m) => m.mnemonic),
+    ['NOTREAL'],
+    'LXD belongs to a development extension and is not a gap',
+  );
+
+  const everything = compareAgainstUpstream(catalogue, upstream, {
+    onlyRatified: false,
+    ratifiedExtensions: ['Shlcofideleg'],
+  });
+  assert.deepEqual(everything.missingExtensions, ['Shlcofideleg', 'Zilx']);
+  assert.equal(everything.missingInstructions.length, 2, 'the wider view still shows both');
+});
+
+test('an instruction counts as ratified if ANY of its owners is', () => {
+  // unified-db attributes some instructions to several extensions. If one of
+  // them is ratified the instruction is reachable from ratified material, so
+  // its absence is a real gap.
+  const upstream = {
+    extensions: [],
+    instructions: [
+      { mnemonic: 'SHARED', match: 0x3000000bn, mask: 0xffffffffn, definedBy: ['Draft', 'Zbb'] },
+    ],
+  };
+  const result = compareAgainstUpstream(catalogue, upstream, {
+    onlyRatified: true,
+    ratifiedExtensions: ['Zbb'],
+  });
+  assert.equal(result.missingInstructions.length, 1);
+});
+
+test('ratification filtering is case-insensitive and defaults to off', () => {
+  const upstream = { extensions: ['Zvfofp4min'], instructions: [] };
+
+  const lower = compareAgainstUpstream(catalogue, upstream, {
+    onlyRatified: true,
+    ratifiedExtensions: ['zvfofp4min'],
+  });
+  assert.deepEqual(lower.missingExtensions, ['Zvfofp4min'], 'case should not matter');
+
+  const off = compareAgainstUpstream(catalogue, upstream);
+  assert.deepEqual(off.missingExtensions, ['Zvfofp4min'], 'unfiltered by default');
+});
