@@ -14,6 +14,7 @@ import {
   isOrderingRefinement,
   flattenCatalogue,
   compareAgainstUpstream,
+  isVariantSpelling,
 } from '../src/completeness.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -437,4 +438,46 @@ test('ratification filtering is case-insensitive and defaults to off', () => {
 
   const off = compareAgainstUpstream(catalogue, upstream);
   assert.deepEqual(off.missingExtensions, ['Zsynthetic'], 'unfiltered by default');
+});
+
+// ── variant spellings ──────────────────────────────────────────────────────
+
+test('a variant spelling is an ordering or XLEN suffix, nothing looser', () => {
+  assert.equal(isVariantSpelling('AMOADD.W', 'AMOADD.W.AQ'), true);
+  assert.equal(isVariantSpelling('REV8.RV32', 'REV8'), true);
+  assert.equal(isVariantSpelling('LR.W', 'LR.W.AQRL'), true);
+  assert.equal(isVariantSpelling('ADD', 'ADD'), true);
+
+  /*
+   * The cases that made this necessary. Letting any broader pattern in the same
+   * extension claim coverage reported C.ADDIW as covered by C.JAL and C.JALR by
+   * C.ADD, which merely share an encoding slot, and ZEXT.H as covered by PACKW,
+   * which it is only because zext.h is packw with rs2 = 0. A completeness gate
+   * that accepts those reports a catalogue complete because somebody else's
+   * bits happen to be a superset.
+   */
+  assert.equal(isVariantSpelling('C.JAL', 'C.ADDIW'), false);
+  assert.equal(isVariantSpelling('C.ADD', 'C.JALR'), false);
+  assert.equal(isVariantSpelling('PACKW', 'ZEXT.H'), false);
+  assert.equal(isVariantSpelling('FENCE', 'FENCE.TSO'), false);
+});
+
+test('a broader row with an unrelated name does not count as coverage', () => {
+  // FENCE's mask is broad enough to cover FENCE.TSO's bits. They are different
+  // instructions, so this must surface rather than pass.
+  const fence = flattenCatalogue(catalogue).find((r) => r.mnemonic === 'FENCE');
+  assert.ok(fence, 'FENCE must exist');
+
+  const result = compareAgainstUpstream(catalogue, {
+    extensions: [],
+    instructions: [
+      {
+        mnemonic: 'FENCE.TSO',
+        match: fence.match | (0x8330n << 16n),
+        mask: 0xffffffffn,
+        definedBy: [fence.extension],
+      },
+    ],
+  });
+  assert.equal(result.coveredByBroaderRow.length, 0, 'FENCE must not cover FENCE.TSO');
 });
