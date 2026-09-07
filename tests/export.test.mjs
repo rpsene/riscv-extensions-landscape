@@ -320,3 +320,49 @@ test('an absorbed extension is reported once, by the bundle that absorbed it', (
   assert.equal(new Set(listed).size, listed.length, 'no extension listed twice');
   assert.ok(listed.includes('Zbkb'), `Zbkb should be reported as folded: ${listed.join(', ')}`);
 });
+
+test('the UDB export keeps its required params for a bare base ISA', () => {
+  // The floor. Every one of these is defined by Sm in unified-db, which makes
+  // deriving them from the selected extensions look like the obvious cleanup and
+  // makes it wrong: isa-dependency-graph.json gives RV32I `requires: []`, Sm is a
+  // separate node, and nothing requires Sm. A derived list is EMPTY here, and the
+  // export would drop every param riscv-arch-test needs without saying so.
+  const yaml = buildIsaConfigYaml(['RV32I'], ALL, { format: 'udb' }).yaml;
+  for (const name of [
+    'PHYS_ADDR_WIDTH',
+    'PRECISE_SYNCHRONOUS_EXCEPTIONS',
+    'TRAP_ON_ECALL_FROM_M',
+    'TRAP_ON_EBREAK',
+    'M_MODE_ENDIANNESS',
+    'MTVEC_ILLEGAL_WRITE_BEHAVIOR',
+  ]) {
+    assert.ok(yaml.includes(`${name}:`), `a bare RV32I export must still ask for ${name}`);
+  }
+});
+
+test('UDB param hints come from the real schema, not from prose we wrote', () => {
+  const yaml = buildIsaConfigYaml(['RV32I'], ALL, { format: 'udb' }).yaml;
+  const line = yaml.split('\n').find((l) => l.trim().startsWith('PHYS_ADDR_WIDTH:'));
+  assert.ok(line, 'PHYS_ADDR_WIDTH must be emitted');
+  // The hardcoded fallback said "physical address width in bits". UDB says the
+  // range, which is the part that stops someone writing 128.
+  assert.match(line, /integer, 1 to 64/, `hint should come from UDB's schema, got: ${line}`);
+});
+
+test('every comment line in a UDB export is a single line', () => {
+  // long_name and description are folded scalars upstream and land inside `#`
+  // comments here. An embedded newline does not wrap the comment, it ends it,
+  // and the remainder becomes a bare line that no YAML parser accepts.
+  const yaml = buildIsaConfigYaml(RVA23, ALL, { format: 'udb' }).yaml;
+  const orphans = yaml
+    .split('\n')
+    .filter(
+      (l) =>
+        /^\s*[a-z][^:#]*$/i.test(l) && l.trim() && !l.includes(':') && !l.trim().startsWith('-'),
+    );
+  assert.deepEqual(
+    orphans,
+    [],
+    `comment text leaked onto its own line:\n  ${orphans.join('\n  ')}`,
+  );
+});

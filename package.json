@@ -15,6 +15,7 @@
     "sync": "node scripts/sync_instructions.mjs",
     "sync:check": "npm run sync -- --strict",
     "sync:udb": "node scripts/sync_udb_extensions.cjs",
+    "sync:params": "node scripts/sync_udb_params.mjs",
     "test": "node --test tests/*.test.mjs",
     "dev": "webpack serve --mode development",
     "lint": "eslint .",
