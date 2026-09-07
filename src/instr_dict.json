@@ -1927,6 +1927,17 @@
     "match": "0x6000101b",
     "mask": "0xfff0707f"
   },
+  "cm_jt": {
+    "encoding": "----------------101000000-----10",
+    "variable_fields": [
+      "c_index"
+    ],
+    "extension": [
+      "rv_zcmt"
+    ],
+    "match": "0xa002",
+    "mask": "0xff83"
+  },
   "cm_jalt": {
     "encoding": "----------------101000--------10",
     "variable_fields": [
