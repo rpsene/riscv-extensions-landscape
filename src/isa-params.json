@@ -49,7 +49,7 @@
     },
     "ASID_WIDTH": {
       "name": "ASID_WIDTH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Number of implemented ASID bits. Maximum is 16 for XLEN==64, and 9 for XLEN==32",
       "schema": {
         "type": "integer",
@@ -177,7 +177,7 @@
     },
     "COUNTINHIBIT_EN": {
       "name": "COUNTINHIBIT_EN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Indicates which hardware performance monitor counters can be disabled from `mcountinhibit`. An unimplemented counter cannot be specified, i.e., if HPM_COUNTER_EN[3] is false, it would be illegal to set COUNTINHIBIT_EN[3] to true. COUNTINHIBIT_EN[1] can never be true, since it corresponds to `mcountinhibit.TM`, which is always read-only-0.",
       "schema": {
         "type": "array",
@@ -222,7 +222,7 @@
     },
     "DBG_HCONTEXT_WIDTH": {
       "name": "DBG_HCONTEXT_WIDTH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Specifies the size of HCONTEXT",
       "schema": {
         "type": "integer",
@@ -238,7 +238,7 @@
     },
     "DBG_SCONTEXT_WIDTH": {
       "name": "DBG_SCONTEXT_WIDTH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Specifies the size of SCONTEXT",
       "schema": {
         "type": "integer",
@@ -254,7 +254,7 @@
     },
     "DCSR_MPRVEN_TYPE": {
       "name": "DCSR_MPRVEN_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementation of dcsr.MPRVEN is optional. It may be tied to either 0 or 1. Behavior of the dcsr.MPRVEN bit: * 'read-only-0': tied to 0 * 'read-only-1': tied to 1 * 'rw': read-write",
       "schema": {
         "type": "string",
@@ -273,7 +273,7 @@
     },
     "DCSR_STEPIE_TYPE": {
       "name": "DCSR_STEPIE_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementation of dcsr.STEPIE is optional. It may be tied to either 0 or 1. Behavior of the dcsr.STEPIE bit: * 'read-only-0': tied to 0 * 'read-only-1': tied to 1 * 'rw': read-write",
       "schema": {
         "type": "string",
@@ -292,7 +292,7 @@
     },
     "DCSR_STOPCOUNT_TYPE": {
       "name": "DCSR_STOPCOUNT_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementation of dcsr.STOPCOUNT is optional. It may be tied to either 0 or 1. Behavior of the dcsr.STOPCOUNT bit: * 'read-only-0': tied to 0 * 'read-only-1': tied to 1 * 'rw': read-write",
       "schema": {
         "type": "string",
@@ -311,7 +311,7 @@
     },
     "DCSR_STOPTIME_TYPE": {
       "name": "DCSR_STOPTIME_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementation of dcsr.STOPTIME is optional. It may be tied to either 0 or 1. Behavior of the dcsr.STOPTIME bit: * 'read-only-0': tied to 0 * 'read-only-1': tied to 1 * 'rw': read-write",
       "schema": {
         "type": "string",
@@ -366,7 +366,7 @@
     },
     "FOLLOW_VTYPE_RESET_RECOMMENDATION": {
       "name": "FOLLOW_VTYPE_RESET_RECOMMENDATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "It is recommended that at reset, vtype.vill is set, the remaining bits in vtype are zero, and vl is set to zero. If this parameter is set to true, this recommendation is followed. If it is false, at reset the respective fields will be UNDEFINED_LEGAL.",
       "schema": {
         "type": "boolean"
@@ -380,7 +380,7 @@
     },
     "FORCE_UPGRADE_CBO_INVAL_TO_FLUSH": {
       "name": "FORCE_UPGRADE_CBO_INVAL_TO_FLUSH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, an implementation prohibits setting `menvcfg.CBIE` == `11` such that all `cbo.inval` instructions either trap (when `menvcfg.CBIE` == '00') or flush (when `menvcfg.CBIE` == '01'). When false, an implementation allows a true INVAL operation for `cbo.inval`, and thus supports the setting `menvcfg.CBIE` == `11`.",
       "schema": {
         "type": "boolean"
@@ -394,7 +394,7 @@
     },
     "GSTAGE_MODE_BARE": {
       "name": "GSTAGE_MODE_BARE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not writing mode=Bare is supported in the `hgatp` register.",
       "schema": {
         "type": "boolean"
@@ -429,7 +429,7 @@
     },
     "HCOUNTENABLE_EN": {
       "name": "HCOUNTENABLE_EN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Indicates which counters can delegated via `hcounteren` An unimplemented counter cannot be specified, i.e., if HPM_COUNTER_EN[3] is false, it would be illegal to set HCOUNTENABLE_EN[3] to true. HCOUNTENABLE_EN[0:2] must all be false if `Zicntr` is not implemented. HCOUNTENABLE_EN[3:31] must all be false if `Zihpm` is not implemented.",
       "schema": {
         "type": "array",
@@ -452,7 +452,7 @@
     },
     "HPM_COUNTER_EN": {
       "name": "HPM_COUNTER_EN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether each HPM counter is implemented in hardware. `HPM_COUNTER_EN[n]` being `false` means `hpmcounter<n>`/`mhpmcounter<n>` and the corresponding `mhpmevent<n>` are not implemented and are hardwired read-only zero. (It does *not* mean the counter is implemented but currently stopped from counting; that is a separate, run-time concept controlled by `mcountinhibit`.) There is one entry for each hpmcounter, indexed 0-31. Indices 0-2 *must* be false: they are placeholders for the three counters (`cycle`/`mcycle` (CY), `time` (TM), and `instret`/`minstret` (IR)) whose implementation this parameter does not control. These counters are associated with indexes 0, 1, and 2. The rest of the HPM counters logically follow at indexes 3-31. Index 3 in HPM_COUNTER_EN corresponds to mhpmcounter3. Index 31 in HPM_COUNTER_EN corresponds to mhpmcounter31.",
       "schema": {
         "type": "array",
@@ -482,7 +482,7 @@
     },
     "HPM_EVENTS": {
       "name": "HPM_EVENTS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "List of defined event numbers that can be written into mhpmeventN",
       "schema": {
         "type": "array",
@@ -658,7 +658,7 @@
     },
     "HSTATEEN_AIA_TYPE": {
       "name": "HSTATEEN_AIA_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the hstateen0.AIA bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -691,7 +691,7 @@
     },
     "HSTATEEN_CONTEXT_TYPE": {
       "name": "HSTATEEN_CONTEXT_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the hstateen0.CONTEXT bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -725,7 +725,7 @@
     },
     "HSTATEEN_CSRIND_TYPE": {
       "name": "HSTATEEN_CSRIND_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the hstateen0.CSRIND bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -758,7 +758,7 @@
     },
     "HSTATEEN_ENVCFG_TYPE": {
       "name": "HSTATEEN_ENVCFG_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the hstateen0.ENVCFG bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -790,7 +790,7 @@
     },
     "HSTATEEN_IMSIC_TYPE": {
       "name": "HSTATEEN_IMSIC_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the hstateen0.IMSIC bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -823,7 +823,7 @@
     },
     "HSTATEEN_JVT_TYPE": {
       "name": "HSTATEEN_JVT_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the hstateen0.JVT bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -856,7 +856,7 @@
     },
     "HW_MSTATUS_FS_DIRTY_UPDATE": {
       "name": "HW_MSTATUS_FS_DIRTY_UPDATE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Indicates whether or not hardware will write to `mstatus.FS` Values are: [separator=\"!\"] !=== h! never ! Hardware never writes `mstatus.FS` h! precise ! Hardware writes `mstatus.FS` to the Dirty (3) state precisely when F registers are modified h! imprecise ! Hardware writes `mstatus.FS` imprecisely. This will result in a call to unpredictable() on any attempt to read `mstatus` or write FP state. !===",
       "schema": {
         "type": "string",
@@ -882,7 +882,7 @@
     },
     "HW_MSTATUS_VS_DIRTY_UPDATE": {
       "name": "HW_MSTATUS_VS_DIRTY_UPDATE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Indicates whether or not hardware will write to `mstatus.VS` Values are: [separator=\"!\"] !=== h! never ! Hardware never writes `mstatus.VS` h! precise ! Hardware writes `mstatus.VS` to the Dirty (3) state precisely when V registers are modified h! imprecise ! Hardware writes `mstatus.VS` imprecisely. This will result in a call to unpredictable() on any attempt to read `mstatus` or write vector state. !===",
       "schema": {
         "type": "string",
@@ -908,7 +908,7 @@
     },
     "IGNORE_INVALID_VSATP_MODE_WRITES_WHEN_V_EQ_ZERO": {
       "name": "IGNORE_INVALID_VSATP_MODE_WRITES_WHEN_V_EQ_ZERO",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether writes from M-mode, U-mode, or S-mode to vsatp with an illegal mode setting are ignored (as they are with satp), or if they are treated as WARL, leading to undpredictable behavior.",
       "schema": {
         "type": "boolean"
@@ -922,7 +922,7 @@
     },
     "IMPRECISE_VECTOR_TRAP_SETTABLE": {
       "name": "IMPRECISE_VECTOR_TRAP_SETTABLE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Some profiles may provide a privileged configuration bit that selects between precise and imprecise vector trap behavior, allowing flexibility in how traps and partial updates are reported.",
       "schema": {
         "type": "boolean"
@@ -1026,7 +1026,7 @@
     },
     "LEGAL_VSTART": {
       "name": "LEGAL_VSTART",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementations may raise illegal-instruction exceptions for vector instructions that specify a `vstart` value the implementation can never produce under the same `vtype` configuration (e.g., due to restrictions on supported strides or alignments).",
       "schema": {
         "type": "string",
@@ -1127,7 +1127,7 @@
     },
     "MCID_WIDTH": {
       "name": "MCID_WIDTH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Number of bits used for the Monitoring Counter ID field (MCID). Default is 12.",
       "schema": {
         "type": "integer",
@@ -1143,7 +1143,7 @@
     },
     "MCONTEXT_AVAILABLE": {
       "name": "MCONTEXT_AVAILABLE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Specifies if MCONTEXT is available",
       "schema": {
         "type": "boolean"
@@ -1157,7 +1157,7 @@
     },
     "MCOUNTENABLE_EN": {
       "name": "MCOUNTENABLE_EN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Indicates which counters can be delegated via `mcounteren`. An unimplemented counter cannot be specified, i.e., if HPM_COUNTER_EN[3] is false, it would be illegal to set MCOUNTENABLE_EN[3] to true. MCOUNTENABLE_EN[0:2] must all be false if `Zicntr` is not implemented. MCOUNTENABLE_EN[3:31] must all be false if `Zihpm` is not implemented.",
       "schema": {
         "type": "array",
@@ -1446,7 +1446,7 @@
     },
     "MISALIGNED_AMO": {
       "name": "MISALIGNED_AMO",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not the implementation supports misaligned atomics in main memory",
       "schema": {
         "type": "boolean"
@@ -1583,7 +1583,7 @@
     },
     "MSTATEEN_AIA_TYPE": {
       "name": "MSTATEEN_AIA_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the mstateen0.AIA bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -1610,7 +1610,7 @@
     },
     "MSTATEEN_CONTEXT_TYPE": {
       "name": "MSTATEEN_CONTEXT_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the mstateen0.CONTEXT bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -1637,7 +1637,7 @@
     },
     "MSTATEEN_CSRIND_TYPE": {
       "name": "MSTATEEN_CSRIND_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the mstateen0.CSRIND bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -1663,7 +1663,7 @@
     },
     "MSTATEEN_ENVCFG_TYPE": {
       "name": "MSTATEEN_ENVCFG_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the mstateen0.ENVCFG bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -1689,7 +1689,7 @@
     },
     "MSTATEEN_IMSIC_TYPE": {
       "name": "MSTATEEN_IMSIC_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the mstateen0.IMSIC bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -1716,7 +1716,7 @@
     },
     "MSTATEEN_JVT_TYPE": {
       "name": "MSTATEEN_JVT_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the mstateen0.JVT bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -1743,7 +1743,7 @@
     },
     "MSTATUS_FS_LEGAL_VALUES": {
       "name": "MSTATUS_FS_LEGAL_VALUES",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "The set of values that mstatus.FS supports.",
       "schema": {
         "type": "array",
@@ -1787,7 +1787,7 @@
     },
     "MSTATUS_VS_LEGAL_VALUES": {
       "name": "MSTATUS_VS_LEGAL_VALUES",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "The set of values that mstatus.VS will accept from a software write.",
       "schema": {
         "type": "array",
@@ -2430,7 +2430,7 @@
     },
     "NUM_EXTERNAL_GUEST_INTERRUPTS": {
       "name": "NUM_EXTERNAL_GUEST_INTERRUPTS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Number of supported virtualized guest interrupts Corresponds to the `GEILEN` parameter in the RVI specs",
       "schema": {
         "type": "integer",
@@ -2468,7 +2468,7 @@
     },
     "NUM_USABLE_PMP_ENTRIES": {
       "name": "NUM_USABLE_PMP_ENTRIES",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Number of implemented PMP entries that are actually usable. An implementation may implement PMP entries (NUM_PMP_ENTRIES) but hardwire some of them to zero (read-only zero). Such entries exist -- their `pmpaddrN`/`pmpNcfg` registers are accessible and will not cause an exception from M-mode -- but they cannot be configured to guard a region. NUM_USABLE_PMP_ENTRIES gives the number of low-numbered entries that are writable/usable. Entries `0` through `NUM_USABLE_PMP_ENTRIES-1` are usable; entries `NUM_USABLE_PMP_ENTRIES` through `NUM_PMP_ENTRIES-1` are read-only zero. Must be between 0 and NUM_PMP_ENTRIES, inclusive.",
       "schema": {
         "type": "integer",
@@ -2525,7 +2525,7 @@
     },
     "PMLEN": {
       "name": "PMLEN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "The number of high-order bits of an address that are masked by the pointer masking facility.",
       "schema": {
         "type": "integer"
@@ -2549,7 +2549,7 @@
     },
     "PMP_GRANULARITY": {
       "name": "PMP_GRANULARITY",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "log2 of the smallest supported PMP region. Generally, for systems with an MMU, should not be smaller than 12, as that would preclude caching PMP results in the TLB along with virtual memory translations Note that PMP_GRANULARITY is equal to G+2 (not G) as described in the privileged architecture.",
       "schema": {
         "type": "integer",
@@ -2630,7 +2630,7 @@
     },
     "RCID_WIDTH": {
       "name": "RCID_WIDTH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Number of bits used for the Resource Control ID field (RCID). Default is 12.",
       "schema": {
         "type": "integer",
@@ -2646,7 +2646,7 @@
     },
     "REPORT_CAUSE_IN_MTVAL_ON_LANDING_PAD_SOFTWARE_CHECK": {
       "name": "REPORT_CAUSE_IN_MTVAL_ON_LANDING_PAD_SOFTWARE_CHECK",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `mtval` is written with the shadow stack cause (code=18) when a SoftwareCheck exception is raised into M-mode due to a landing pad error. When false, `mtval` is written with 0.",
       "schema": {
         "type": "boolean"
@@ -2660,7 +2660,7 @@
     },
     "REPORT_CAUSE_IN_MTVAL_ON_SHADOW_STACK_SOFTWARE_CHECK": {
       "name": "REPORT_CAUSE_IN_MTVAL_ON_SHADOW_STACK_SOFTWARE_CHECK",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `mtval` is written with the shadow stack cause (code=3) when a SoftwareCheck exception is raised into M-mode due to a shadow stack pop check instruction. When false, `mtval` is written with 0.",
       "schema": {
         "type": "boolean"
@@ -2674,7 +2674,7 @@
     },
     "REPORT_CAUSE_IN_STVAL_ON_LANDING_PAD_SOFTWARE_CHECK": {
       "name": "REPORT_CAUSE_IN_STVAL_ON_LANDING_PAD_SOFTWARE_CHECK",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the shadow stack cause (code=18) when a SoftwareCheck exception is raised into S-mode due to a landing pad error. When false, `stval` is written with 0.",
       "schema": {
         "type": "boolean"
@@ -2688,7 +2688,7 @@
     },
     "REPORT_CAUSE_IN_STVAL_ON_SHADOW_STACK_SOFTWARE_CHECK": {
       "name": "REPORT_CAUSE_IN_STVAL_ON_SHADOW_STACK_SOFTWARE_CHECK",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the shadow stack cause (code=3) when a SoftwareCheck exception is raised into S-mode due to a shadow stack pop check instruction. When false, `stval` is written with 0.",
       "schema": {
         "type": "boolean"
@@ -2702,7 +2702,7 @@
     },
     "REPORT_CAUSE_IN_VSTVAL_ON_LANDING_PAD_SOFTWARE_CHECK": {
       "name": "REPORT_CAUSE_IN_VSTVAL_ON_LANDING_PAD_SOFTWARE_CHECK",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the shadow stack cause (code=18) when a SoftwareCheck exception is raised into VS-mode due to a landing pad error. When false, `vstval` is written with 0.",
       "schema": {
         "type": "boolean"
@@ -2716,7 +2716,7 @@
     },
     "REPORT_CAUSE_IN_VSTVAL_ON_SHADOW_STACK_SOFTWARE_CHECK": {
       "name": "REPORT_CAUSE_IN_VSTVAL_ON_SHADOW_STACK_SOFTWARE_CHECK",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the shadow stack cause (code=3) when a SoftwareCheck exception is raised into VS-mode due to a shadow stack pop check instruction. When false, `vstval` is written with 0.",
       "schema": {
         "type": "boolean"
@@ -2744,7 +2744,7 @@
     },
     "REPORT_ENCODING_IN_STVAL_ON_ILLEGAL_INSTRUCTION": {
       "name": "REPORT_ENCODING_IN_STVAL_ON_ILLEGAL_INSTRUCTION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the encoding of an instruction that causes an `IllegalInstruction` exception. When false `stval` is written with 0 when an `IllegalInstruction` exception occurs.",
       "schema": {
         "type": "boolean"
@@ -2758,7 +2758,7 @@
     },
     "REPORT_ENCODING_IN_VSTVAL_ON_ILLEGAL_INSTRUCTION": {
       "name": "REPORT_ENCODING_IN_VSTVAL_ON_ILLEGAL_INSTRUCTION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the encoding of an instruction that causes an `IllegalInstruction` exception. When false `vstval` is written with 0 when an `IllegalInstruction` exception occurs.",
       "schema": {
         "type": "boolean"
@@ -2772,7 +2772,7 @@
     },
     "REPORT_ENCODING_IN_VSTVAL_ON_VIRTUAL_INSTRUCTION": {
       "name": "REPORT_ENCODING_IN_VSTVAL_ON_VIRTUAL_INSTRUCTION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the encoding of an instruction that causes an `VirualInstruction` exception. When false `vstval` is written with 0 when an `VirtualInstruction` exception occurs.",
       "schema": {
         "type": "boolean"
@@ -2786,7 +2786,7 @@
     },
     "REPORT_GPA_IN_HTVAL_ON_GUEST_PAGE_FAULT": {
       "name": "REPORT_GPA_IN_HTVAL_ON_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `htval` is written with the Guest Physical Address, shifted right by 2, that caused a `GuestPageFault` exception. When false, `htval` is written with 0 when a `GuestPageFault` exception occurs.",
       "schema": {
         "type": "boolean"
@@ -2800,7 +2800,7 @@
     },
     "REPORT_GPA_IN_TVAL_ON_INSTRUCTION_GUEST_PAGE_FAULT": {
       "name": "REPORT_GPA_IN_TVAL_ON_INSTRUCTION_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not GPA >> 2 is written into htval/mtval2 when an instruction guest page fault occurs. If false, 0 will be written into htval/mtval2 on an instruction guest page fault.",
       "schema": {
         "type": "boolean"
@@ -2814,7 +2814,7 @@
     },
     "REPORT_GPA_IN_TVAL_ON_INTERMEDIATE_GUEST_PAGE_FAULT": {
       "name": "REPORT_GPA_IN_TVAL_ON_INTERMEDIATE_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not GPA >> 2 is written into htval/mtval2 when a guest page fault occurs while walking a VS-mode page table. If false, 0 will be written into htval/mtval2 on an intermediate guest page fault.",
       "schema": {
         "type": "boolean"
@@ -2828,7 +2828,7 @@
     },
     "REPORT_GPA_IN_TVAL_ON_LOAD_GUEST_PAGE_FAULT": {
       "name": "REPORT_GPA_IN_TVAL_ON_LOAD_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not GPA >> 2 is written into htval/mtval2 when a load guest page fault occurs. If false, 0 will be written into htval/mtval2 on a load guest page fault.",
       "schema": {
         "type": "boolean"
@@ -2842,7 +2842,7 @@
     },
     "REPORT_GPA_IN_TVAL_ON_STORE_AMO_GUEST_PAGE_FAULT": {
       "name": "REPORT_GPA_IN_TVAL_ON_STORE_AMO_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not GPA >> 2 is written into htval/mtval2 when a store/amo guest page fault occurs. If false, 0 will be written into htval/mtval2 on a store/amo guest page fault.",
       "schema": {
         "type": "boolean"
@@ -2898,7 +2898,7 @@
     },
     "REPORT_VA_IN_MTVAL_ON_INSTRUCTION_PAGE_FAULT": {
       "name": "REPORT_VA_IN_MTVAL_ON_INSTRUCTION_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `mtval` is written with the virtual PC of an instructino when fetch causes an `InstructionPageFault`. WHen false, `mtval` is written with 0 when an instruction fetch causes an `InstructionPageFault`.",
       "schema": {
         "type": "boolean"
@@ -2940,7 +2940,7 @@
     },
     "REPORT_VA_IN_MTVAL_ON_LOAD_PAGE_FAULT": {
       "name": "REPORT_VA_IN_MTVAL_ON_LOAD_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `mtval` is written with the virtual address of a load when it causes a `LoadPageFault`. WHen false, `mtval` is written with 0 when a load causes a `LoadPageFault`.",
       "schema": {
         "type": "boolean"
@@ -2982,7 +2982,7 @@
     },
     "REPORT_VA_IN_MTVAL_ON_STORE_AMO_PAGE_FAULT": {
       "name": "REPORT_VA_IN_MTVAL_ON_STORE_AMO_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `mtval` is written with the virtual address of a store when it causes a `StoreAmoPageFault`. WHen false, `mtval` is written with 0 when a store causes a `StoreAmoPageFault`.",
       "schema": {
         "type": "boolean"
@@ -2996,7 +2996,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_BREAKPOINT": {
       "name": "REPORT_VA_IN_STVAL_ON_BREAKPOINT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual PC of the EBREAK instruction (same information as `mepc`). When false, `stval` is written with 0 on an EBREAK instruction. Regardless, `stval` is always written with a virtual PC when an external breakpoint is generated",
       "schema": {
         "type": "boolean"
@@ -3010,7 +3010,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_INSTRUCTION_ACCESS_FAULT": {
       "name": "REPORT_VA_IN_STVAL_ON_INSTRUCTION_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual PC of an instructino when fetch causes an `InstructionAccessFault`. WHen false, `stval` is written with 0 when an instruction fetch causes an `InstructionAccessFault`.",
       "schema": {
         "type": "boolean"
@@ -3024,7 +3024,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_INSTRUCTION_MISALIGNED": {
       "name": "REPORT_VA_IN_STVAL_ON_INSTRUCTION_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual PC when an instruction fetch is misaligned. When false, `stval` is written with 0 when an instruction fetch is misaligned. Note that when IALIGN=16 (i.e., when the `C` or one of the `Zc*` extensions are implemented), it is impossible to generate a misaligned fetch, and so this parameter has no effect.",
       "schema": {
         "type": "boolean"
@@ -3038,7 +3038,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_INSTRUCTION_PAGE_FAULT": {
       "name": "REPORT_VA_IN_STVAL_ON_INSTRUCTION_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual PC of an instructino when fetch causes an `InstructionPageFault`. WHen false, `stval` is written with 0 when an instruction fetch causes an `InstructionPageFault`.",
       "schema": {
         "type": "boolean"
@@ -3052,7 +3052,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_LOAD_ACCESS_FAULT": {
       "name": "REPORT_VA_IN_STVAL_ON_LOAD_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual address of a load when it causes a `LoadAccessFault`. WHen false, `stval` is written with 0 when a load causes a `LoadAccessFault`.",
       "schema": {
         "type": "boolean"
@@ -3066,7 +3066,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_LOAD_MISALIGNED": {
       "name": "REPORT_VA_IN_STVAL_ON_LOAD_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual address of a load instruction when the address is misaligned and MISALIGNED_LDST is false. When false, `stval` is written with 0 when a load address is misaligned and MISALIGNED_LDST is false.",
       "schema": {
         "type": "boolean"
@@ -3080,7 +3080,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_LOAD_PAGE_FAULT": {
       "name": "REPORT_VA_IN_STVAL_ON_LOAD_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual address of a load when it causes a `LoadPageFault`. WHen false, `stval` is written with 0 when a load causes a `LoadPageFault`.",
       "schema": {
         "type": "boolean"
@@ -3094,7 +3094,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_STORE_AMO_ACCESS_FAULT": {
       "name": "REPORT_VA_IN_STVAL_ON_STORE_AMO_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual address of a store when it causes a `StoreAmoAccessFault`. WHen false, `stval` is written with 0 when a store causes a `StoreAmoAccessFault`.",
       "schema": {
         "type": "boolean"
@@ -3108,7 +3108,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_STORE_AMO_MISALIGNED": {
       "name": "REPORT_VA_IN_STVAL_ON_STORE_AMO_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual address of a store instruction when the address is misaligned and MISALIGNED_LDST is false. When false, `stval` is written with 0 when a store address is misaligned and MISALIGNED_LDST is false.",
       "schema": {
         "type": "boolean"
@@ -3122,7 +3122,7 @@
     },
     "REPORT_VA_IN_STVAL_ON_STORE_AMO_PAGE_FAULT": {
       "name": "REPORT_VA_IN_STVAL_ON_STORE_AMO_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `stval` is written with the virtual address of a store when it causes a `StoreAmoPageFault`. WHen false, `stval` is written with 0 when a store causes a `StoreAmoPageFault`.",
       "schema": {
         "type": "boolean"
@@ -3136,7 +3136,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_BREAKPOINT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_BREAKPOINT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual PC of the EBREAK instruction (same information as `mepc`). When false, `vstval` is written with 0 on an EBREAK instruction. Regardless, `vstval` is always written with a virtual PC when an external breakpoint is generated.",
       "schema": {
         "type": "boolean"
@@ -3150,7 +3150,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_ACCESS_FAULT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual PC of an instructino when fetch causes an `InstructionAccessFault`. WHen false, `vstval` is written with 0 when an instruction fetch causes an `InstructionAccessFault`.",
       "schema": {
         "type": "boolean"
@@ -3164,7 +3164,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_MISALIGNED": {
       "name": "REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual PC when an instruction fetch is misaligned. When false, `vstval` is written with 0 when an instruction fetch is misaligned. Note that when IALIGN=16 (i.e., when the `C` or one of the `Zc*` extensions are implemented), it is impossible to generate a misaligned fetch, and so this parameter has no effect.",
       "schema": {
         "type": "boolean"
@@ -3178,7 +3178,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_PAGE_FAULT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_INSTRUCTION_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual PC of an instructino when fetch causes an `InstructionPageFault`. WHen false, `vstval` is written with 0 when an instruction fetch causes an `InstructionPageFault`.",
       "schema": {
         "type": "boolean"
@@ -3192,7 +3192,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_LOAD_ACCESS_FAULT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_LOAD_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual address of a load when it causes a `LoadAccessFault`. WHen false, `vstval` is written with 0 when a load causes a `LoadAccessFault`.",
       "schema": {
         "type": "boolean"
@@ -3206,7 +3206,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_LOAD_MISALIGNED": {
       "name": "REPORT_VA_IN_VSTVAL_ON_LOAD_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual address of a load instruction when the address is misaligned and MISALIGNED_LDST is false. When false, `vstval` is written with 0 when a load address is misaligned and MISALIGNED_LDST is false.",
       "schema": {
         "type": "boolean"
@@ -3220,7 +3220,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_LOAD_PAGE_FAULT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_LOAD_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual address of a load when it causes a `LoadPageFault`. WHen false, `vstval` is written with 0 when a load causes a `LoadPageFault`.",
       "schema": {
         "type": "boolean"
@@ -3234,7 +3234,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_STORE_AMO_ACCESS_FAULT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_STORE_AMO_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual address of a store when it causes a `StoreAmoAccessFault`. WHen false, `vstval` is written with 0 when a store causes a `StoreAmoAccessFault`.",
       "schema": {
         "type": "boolean"
@@ -3248,7 +3248,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_STORE_AMO_MISALIGNED": {
       "name": "REPORT_VA_IN_VSTVAL_ON_STORE_AMO_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual address of a store instruction when the address is misaligned and MISALIGNED_LDST is false. When false, `vstval` is written with 0 when a store address is misaligned and MISALIGNED_LDST is false.",
       "schema": {
         "type": "boolean"
@@ -3262,7 +3262,7 @@
     },
     "REPORT_VA_IN_VSTVAL_ON_STORE_AMO_PAGE_FAULT": {
       "name": "REPORT_VA_IN_VSTVAL_ON_STORE_AMO_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, `vstval` is written with the virtual address of a store when it causes a `StoreAmoPageFault`. WHen false, `vstval` is written with 0 when a store causes a `StoreAmoPageFault`.",
       "schema": {
         "type": "boolean"
@@ -3276,7 +3276,7 @@
     },
     "RESERVED_VSET_X0X0_VILL_SET": {
       "name": "RESERVED_VSET_X0X0_VILL_SET",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When rs1 = x0 and rd = x0, vset instructions act as if the current vector length in `vl` is used as the AVL. If `vill` is set or the configuration is reserved, implementations may set `vill` to indicate unsupported use of these encodings.",
       "schema": {
         "type": "string",
@@ -3295,7 +3295,7 @@
     },
     "RESERVED_VSET_X0X0_VLMAX_CHANGE": {
       "name": "RESERVED_VSET_X0X0_VLMAX_CHANGE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When rs1=x0 and rd=x0, the instructions operate as if the current vector length in vl is used as the AVL. Use of the vset instructions with a new SEW/LMUL ratio that would result in a change of VLMAX is reserved. Implementations may set vill in either case.",
       "schema": {
         "type": "string",
@@ -3314,7 +3314,7 @@
     },
     "RVV_VL_WHEN_AVL_LT_DOUBLE_VLMAX": {
       "name": "RVV_VL_WHEN_AVL_LT_DOUBLE_VLMAX",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "The value assigned to VL when AVL < 2*VLMAX.",
       "schema": {
         "type": "string",
@@ -3333,7 +3333,7 @@
     },
     "SATP_MODE_BARE": {
       "name": "SATP_MODE_BARE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not satp.MODE == Bare is supported.",
       "schema": {
         "type": "boolean"
@@ -3347,7 +3347,7 @@
     },
     "SCOUNTENABLE_EN": {
       "name": "SCOUNTENABLE_EN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Indicates which counters can delegated via `scounteren` An unimplemented counter cannot be specified, i.e., if HPM_COUNTER_EN[3] is false, it would be illegal to set SCOUNTENABLE_EN[3] to true. SCOUNTENABLE_EN[0:2] must all be false if `Zicntr` is not implemented. SCOUNTENABLE_EN[3:31] must all be false if `Zihpm` is not implemented.",
       "schema": {
         "type": "array",
@@ -3397,7 +3397,7 @@
     },
     "SEW_MIN": {
       "name": "SEW_MIN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementations must provide fractional LMUL settings that allow the narrowest supported element width (SEW) to occupy a fractional portion of a vector register relative to the widest supported SEW. In general, implementations must support LMUL >= SEW_MIN/ELEN, where SEW_MIN is the narrowest supported SEW and ELEN is the widest SEW.",
       "schema": {
         "type": "integer",
@@ -3418,7 +3418,7 @@
     },
     "SSTATEEN_JVT_TYPE": {
       "name": "SSTATEEN_JVT_TYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Behavior of the sstateen0.JVT bit: * 'rw': read-write * 'read-only-0': read-only, fixed to 0 * 'read-only-1': read-only, fixed to 1",
       "schema": {
         "type": "string",
@@ -3592,7 +3592,7 @@
     },
     "SUPPORT_FRACTIONAL_LMUL_BEYOND_REQUIRED": {
       "name": "SUPPORT_FRACTIONAL_LMUL_BEYOND_REQUIRED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "For a given supported fractional LMUL setting, implementations must provide support for SEW settings covering the range from SEW_MIN up to LMUL * ELEN, inclusive. This ensures types narrower than the maximum SEW are supported when fractional LMULs are selected.",
       "schema": {
         "type": "string",
@@ -3610,7 +3610,7 @@
     },
     "SV32X4_TRANSLATION": {
       "name": "SV32X4_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv32x4 translation mode is supported.",
       "schema": {
         "type": "boolean"
@@ -3638,7 +3638,7 @@
     },
     "SV32_VSMODE_TRANSLATION": {
       "name": "SV32_VSMODE_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv32 translation is supported in first-stage (VS-stage) translation.",
       "schema": {
         "type": "boolean"
@@ -3666,7 +3666,7 @@
     },
     "SV39X4_TRANSLATION": {
       "name": "SV39X4_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv39x4 translation mode is supported.",
       "schema": {
         "type": "boolean"
@@ -3694,7 +3694,7 @@
     },
     "SV39_VSMODE_TRANSLATION": {
       "name": "SV39_VSMODE_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv39 translation is supported in first-stage (VS-stage) translation.",
       "schema": {
         "type": "boolean"
@@ -3722,7 +3722,7 @@
     },
     "SV48X4_TRANSLATION": {
       "name": "SV48X4_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv48x4 translation mode is supported.",
       "schema": {
         "type": "boolean"
@@ -3750,7 +3750,7 @@
     },
     "SV48_VSMODE_TRANSLATION": {
       "name": "SV48_VSMODE_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv48 translation is supported in first-stage (VS-stage) translation.",
       "schema": {
         "type": "boolean"
@@ -3778,7 +3778,7 @@
     },
     "SV57X4_TRANSLATION": {
       "name": "SV57X4_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv57x4 translation mode is supported.",
       "schema": {
         "type": "boolean"
@@ -3806,7 +3806,7 @@
     },
     "SV57_VSMODE_TRANSLATION": {
       "name": "SV57_VSMODE_TRANSLATION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not Sv57 translation is supported in first-stage (VS-stage) translation.",
       "schema": {
         "type": "boolean"
@@ -3834,7 +3834,7 @@
     },
     "SXLEN": {
       "name": "SXLEN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Set of XLENs supported in S-mode. Can be one of: * [32]: SXLEN is always 32 * [64]: SXLEN is always 64 * [32, 64]: SXLEN can be changed (via mstatus.SXL) between 32 and 64",
       "schema": {
         "type": "array",
@@ -3861,7 +3861,7 @@
     },
     "S_MODE_ENDIANNESS": {
       "name": "S_MODE_ENDIANNESS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Endianness of data in S-mode. Can be one of: * little: S-mode data is always little endian * big: S-mode data is always big endian * dynamic: S-mode data can be either little or big endian, depending on the CSR field `mstatus.SBE`",
       "schema": {
         "type": "string",
@@ -3880,7 +3880,7 @@
     },
     "TIME_CSR_IMPLEMENTED": {
       "name": "TIME_CSR_IMPLEMENTED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not a real hardware `time` CSR exists. Implementations can either provide a real CSR or emulate access at M-mode. Possible values: true:: `time`/`timeh` exists, and accessing it will not cause an IllegalInstruction trap false:: `time`/`timeh` does not exist. Accessing the CSR will cause an IllegalInstruction trap or enter an unpredictable state, depending on TRAP_ON_UNIMPLEMENTED_CSR. Privileged software may emulate the `time` CSR, or may pass the exception to a lower level.",
       "schema": {
         "type": "boolean"
@@ -3894,7 +3894,7 @@
     },
     "TINST_VALUE_ON_BREAKPOINT": {
       "name": "TINST_VALUE_ON_BREAKPOINT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a Breakpoint exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -3912,7 +3912,7 @@
     },
     "TINST_VALUE_ON_FINAL_INSTRUCTION_GUEST_PAGE_FAULT": {
       "name": "TINST_VALUE_ON_FINAL_INSTRUCTION_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst when there is an instruction guest-page fault on a final translation. Possible values: * \"always zero\": Always write the value zero * \"always pseudoinstruction\": Always write the pseudoinstruction",
       "schema": {
         "type": "string",
@@ -3930,7 +3930,7 @@
     },
     "TINST_VALUE_ON_FINAL_LOAD_GUEST_PAGE_FAULT": {
       "name": "TINST_VALUE_ON_FINAL_LOAD_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst when there is a load guest-page fault on a final translation. Possible values: * \"always zero\": Always write the value zero * \"always pseudoinstruction\": Always write the pseudoinstruction * \"always transformed standard instruction\": Always write the transformation of the standard instruction encoding * \"custom\": A custom value, which will cause an UNPREDICTABLE event.",
       "schema": {
         "type": "string",
@@ -3950,7 +3950,7 @@
     },
     "TINST_VALUE_ON_FINAL_STORE_AMO_GUEST_PAGE_FAULT": {
       "name": "TINST_VALUE_ON_FINAL_STORE_AMO_GUEST_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst when there is a store/AMO guest-page fault on a final translation. Possible values: * \"always zero\": Always write the value zero * \"always pseudoinstruction\": Always write the pseudoinstruction * \"always transformed standard instruction\": Always write the transformation of the standard instruction encoding * \"custom\": A custom value, which will cause an UNPREDICTABLE event.",
       "schema": {
         "type": "string",
@@ -3970,7 +3970,7 @@
     },
     "TINST_VALUE_ON_INSTRUCTION_ADDRESS_MISALIGNED": {
       "name": "TINST_VALUE_ON_INSTRUCTION_ADDRESS_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst when there is an instruction address misaligned exception. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -3988,7 +3988,7 @@
     },
     "TINST_VALUE_ON_LOAD_ACCESS_FAULT": {
       "name": "TINST_VALUE_ON_LOAD_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on an AccessFault exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"always transformed standard instruction\": Always write a transformed standard instruction as defined by H * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4007,7 +4007,7 @@
     },
     "TINST_VALUE_ON_LOAD_ADDRESS_MISALIGNED": {
       "name": "TINST_VALUE_ON_LOAD_ADDRESS_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a LoadAddressMisaligned exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"always transformed standard instruction\": Always write a transformed standard instruction as defined by H * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4026,7 +4026,7 @@
     },
     "TINST_VALUE_ON_LOAD_PAGE_FAULT": {
       "name": "TINST_VALUE_ON_LOAD_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a LoadPageFault exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"always transformed standard instruction\": Always write a transformed standard instruction as defined by H * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4045,7 +4045,7 @@
     },
     "TINST_VALUE_ON_MCALL": {
       "name": "TINST_VALUE_ON_MCALL",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a MCall exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4063,7 +4063,7 @@
     },
     "TINST_VALUE_ON_SCALL": {
       "name": "TINST_VALUE_ON_SCALL",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a SCall exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4081,7 +4081,7 @@
     },
     "TINST_VALUE_ON_STORE_AMO_ACCESS_FAULT": {
       "name": "TINST_VALUE_ON_STORE_AMO_ACCESS_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on an AccessFault exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"always transformed standard instruction\": Always write a transformed standard instruction as defined by H * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4100,7 +4100,7 @@
     },
     "TINST_VALUE_ON_STORE_AMO_ADDRESS_MISALIGNED": {
       "name": "TINST_VALUE_ON_STORE_AMO_ADDRESS_MISALIGNED",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a StoreAmoAddressMisaligned exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"always transformed standard instruction\": Always write a transformed standard instruction as defined by H * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4119,7 +4119,7 @@
     },
     "TINST_VALUE_ON_STORE_AMO_PAGE_FAULT": {
       "name": "TINST_VALUE_ON_STORE_AMO_PAGE_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a StoreAmoPageFault exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"always transformed standard instruction\": Always write a transformed standard instruction as defined by H * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4138,7 +4138,7 @@
     },
     "TINST_VALUE_ON_UCALL": {
       "name": "TINST_VALUE_ON_UCALL",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a UCall exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4156,7 +4156,7 @@
     },
     "TINST_VALUE_ON_VIRTUAL_INSTRUCTION": {
       "name": "TINST_VALUE_ON_VIRTUAL_INSTRUCTION",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a VirtualInstruction exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4174,7 +4174,7 @@
     },
     "TINST_VALUE_ON_VSCALL": {
       "name": "TINST_VALUE_ON_VSCALL",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Value written into htinst/mtinst on a VSCall exception from VU/VS-mode. Possible values: * \"always zero\": Always write the value zero * \"custom\": Write a custom value, which results in UNPREDICTABLE",
       "schema": {
         "type": "string",
@@ -4358,7 +4358,7 @@
     },
     "UXLEN": {
       "name": "UXLEN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Set of XLENs supported in U-mode. When both 32 and 64 are supported, UXLEN can be changed, via mstatus.UXL, between 32 and 64.",
       "schema": {
         "type": "array",
@@ -4384,7 +4384,7 @@
     },
     "U_MODE_ENDIANNESS": {
       "name": "U_MODE_ENDIANNESS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Endianness of data in U-mode. Can be one of: * little: U-mode data is always little endian * big: U-mode data is always big endian * dynamic: U-mode data can be either little or big endian, depending on the CSR field `mstatus.UBE`",
       "schema": {
         "type": "string",
@@ -4403,7 +4403,7 @@
     },
     "VECTOR_FF_NO_EXCEPTION_TRIM": {
       "name": "VECTOR_FF_NO_EXCEPTION_TRIM",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementations may process fewer than `vl` elements and reduce `vl` even when no exception occurs. However, if `vstart` == 0 and `vl` > 0, at least one element must be processed.",
       "schema": {
         "type": "boolean"
@@ -4417,7 +4417,7 @@
     },
     "VECTOR_FF_SEG_EXCEPTION_PARTIAL_LOAD": {
       "name": "VECTOR_FF_SEG_EXCEPTION_PARTIAL_LOAD",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "For fault-only-first segment loads, if an exception occurs partway through the zeroth segment, the trap is taken. If it occurs in a subsequent segment, `vl` may be reduced to the index of that segment. It is implementation-defined whether a partial subset of the segment is loaded before the trap.",
       "schema": {
         "type": "string",
@@ -4435,7 +4435,7 @@
     },
     "VECTOR_FF_UPDATE_PAST_TRIM": {
       "name": "VECTOR_FF_UPDATE_PAST_TRIM",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Fault-only-first (FF) load instructions may update active destination elements beyond the index that causes vector-length trimming, but not past the original `vl`. These spurious updates need not reflect the true memory contents; non-idempotent memory should only be accessed when the load is guaranteed not to be retried.",
       "schema": {
         "type": "string",
@@ -4453,7 +4453,7 @@
     },
     "VECTOR_LOAD_PAST_TRAP": {
       "name": "VECTOR_LOAD_PAST_TRAP",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Vector load instructions may overwrite active destination vector register group elements past the element index where a trap is reported; the behavior for elements beyond the trap index is implementation-defined.",
       "schema": {
         "type": "boolean"
@@ -4467,7 +4467,7 @@
     },
     "VECTOR_LOAD_SEG_FF_OVERWRITE_ELEMENTS_AFTER_FAULT": {
       "name": "VECTOR_LOAD_SEG_FF_OVERWRITE_ELEMENTS_AFTER_FAULT",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Fault-only-first segment load instructions may overwrite destination vector register group elements beyond the point where a trap is reported or where `vl` is trimmed; the exact values written may be implementation-defined.",
       "schema": {
         "type": "string",
@@ -4485,7 +4485,7 @@
     },
     "VECTOR_LS_INDEX_MAX_EEW": {
       "name": "VECTOR_LS_INDEX_MAX_EEW",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "A profile may place an upper limit on the maximum supported index EEW used by vector load/store indexing. For example, some profiles may limit indexing to sizes no larger than XLEN or a fixed EEW value.",
       "schema": {
         "type": "string",
@@ -4506,7 +4506,7 @@
     },
     "VECTOR_LS_MISALIGNED_LEGAL": {
       "name": "VECTOR_LS_MISALIGNED_LEGAL",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "If an element accessed by a vector memory instruction is not naturally aligned to the size of the element, either the element is transferred successfully or an address misaligned exception is raised on that element. Support for misaligned vector memory accesses is independent of an implementation's support for misaligned scalar memory accesses.",
       "schema": {
         "type": "boolean"
@@ -4520,7 +4520,7 @@
     },
     "VECTOR_LS_SEG_PARTIAL_ACCESS": {
       "name": "VECTOR_LS_SEG_PARTIAL_ACCESS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "If a trap occurs during access to a segment, it is implementation-defined whether some, all, or none of that segment's element accesses are performed before the trap is taken.",
       "schema": {
         "type": "boolean"
@@ -4534,7 +4534,7 @@
     },
     "VECTOR_LS_WHOLEREG_MISALIGNED_LEGAL": {
       "name": "VECTOR_LS_WHOLEREG_MISALIGNED_LEGAL",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementations may raise a misaligned address exception for whole-register loads/stores if the base address is not aligned to the maximum of the encoded EEW size (in bytes) or the implementation's smallest supported SEW (in bytes).",
       "schema": {
         "type": "boolean"
@@ -4580,7 +4580,7 @@
     },
     "VFREDUSUM_FINAL_NODE_ELEMENT_BEHAVIOR": {
       "name": "VFREDUSUM_FINAL_NODE_ELEMENT_BEHAVIOR",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Implementations are permitted to insert an additional additive identity into the final reduction result, which may affect the final outcome when no active elements are present.",
       "schema": {
         "type": "string",
@@ -4598,7 +4598,7 @@
     },
     "VFREDUSUM_INACTIVE_NODE_ELEMENT_BEHAVIOR": {
       "name": "VFREDUSUM_INACTIVE_NODE_ELEMENT_BEHAVIOR",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "A reduction node that receives an input derived solely from masked-off elements or elements beyond `vl` may either treat that input as the additive identity for the appropriate element width or copy the other input through unchanged to the node output.",
       "schema": {
         "type": "string",
@@ -4616,7 +4616,7 @@
     },
     "VFREDUSUM_NAN": {
       "name": "VFREDUSUM_NAN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "The reduction tree structure must be deterministic for a given `vtype` and `vl`; as a consequence, implementations need not preserve NaN payloads when no elements are active. If no elements are active and the scalar input is NaN, implementations may canonicalize it (and raise an exception if it is a signaling NaN) or pass it through unchanged.",
       "schema": {
         "type": "string",
@@ -4634,7 +4634,7 @@
     },
     "VFREDUSUM_NODE_ROUNDING_BEHAVIOR": {
       "name": "VFREDUSUM_NODE_ROUNDING_BEHAVIOR",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Each reduction operator computes an exact sum using an ideal scalar floating-point addition, then converts that result into a floating- point format with range and precision at least as large as the element SEW, rounding with the current dynamic rounding mode and raising exceptions as needed. Implementations may choose the exact range and precision per operator.",
       "schema": {
         "type": "string",
@@ -4652,7 +4652,7 @@
     },
     "VILL_SET_ON_RESERVED_VTYPE": {
       "name": "VILL_SET_ON_RESERVED_VTYPE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Use of vtype encodings with LMUL < SEW_MIN/ELEN is reserved. Implementations may set the `vill` status bit to indicate such vtype encodings are unsupported, providing a software-visible indication of invalid vtype selections.",
       "schema": {
         "type": "boolean"
@@ -4694,7 +4694,7 @@
     },
     "VMID_WIDTH": {
       "name": "VMID_WIDTH",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Number of bits supported in `hgatp.VMID` (i.e., the supported width of a virtual machine ID).",
       "schema": {
         "type": "integer",
@@ -4713,7 +4713,7 @@
     },
     "VSSTAGE_MODE_BARE": {
       "name": "VSSTAGE_MODE_BARE",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Whether or not writing mode=Bare is supported in the `vsatp` register.",
       "schema": {
         "type": "boolean"
@@ -4730,7 +4730,7 @@
     },
     "VSSTATUS_VS_EXISTS": {
       "name": "VSSTATUS_VS_EXISTS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Some implementations provide a `vsstatus.VS` field even when the `misa.V` bit is clear. This parameter indicates whether `vsstatus.VS` exists independently of the `misa.V` setting.",
       "schema": {
         "type": "boolean"
@@ -4768,7 +4768,7 @@
     },
     "VSXLEN": {
       "name": "VSXLEN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Set of XLENs supported in VS-mode. Can be one of: * [32]: VSXLEN is always 32 * [64]: VSXLEN is always 64 * [32, 64]: VSXLEN can be changed (via `hstatus.VSXL`) between 32 and 64",
       "schema": {
         "type": "array",
@@ -4795,7 +4795,7 @@
     },
     "VS_MODE_ENDIANNESS": {
       "name": "VS_MODE_ENDIANNESS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Endianness of data in VS-mode. Can be one of: * little: VS-mode data is always little endian * big: VS-mode data is always big endian * dynamic: VS-mode data can be either little or big endian, depending on the CSR field `hstatus.VSBE`",
       "schema": {
         "type": "string",
@@ -4814,7 +4814,7 @@
     },
     "VUXLEN": {
       "name": "VUXLEN",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Set of XLENs supported in VU-mode. When both 32 and 64 are supported, VUXLEN can be changed via `vsstatus.UXL`.",
       "schema": {
         "type": "array",
@@ -4841,7 +4841,7 @@
     },
     "VU_MODE_ENDIANNESS": {
       "name": "VU_MODE_ENDIANNESS",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "Endianness of data in VU-mode. Can be one of: * little: VU-mode data is always little endian * big: VU-mode data is always big endian * dynamic: VU-mode data can be either little or big endian, depending on the CSR field `vsstatus.UBE`",
       "schema": {
         "type": "string",
@@ -4860,7 +4860,7 @@
     },
     "ZAWRS_NTO_IS_NOP": {
       "name": "ZAWRS_NTO_IS_NOP",
-      "long_name": "TODO",
+      "long_name": null,
       "description": "When true, WRS.NTO completes immediately, behaving as a no-op, rather than stalling the hart.",
       "schema": {
         "type": "boolean"

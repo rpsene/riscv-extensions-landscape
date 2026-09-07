@@ -205,3 +205,22 @@ test('no long_name or description carries a newline', () => {
   );
   assert.deepEqual(multiline, [], `fields spanning lines: ${multiline.join(', ')}`);
 });
+
+test('no parameter carries a placeholder as its name', () => {
+  // 138 of the 228 have `long_name: TODO` upstream. Copied through, the app
+  // prints "TODO" in front of a real description, in the workspace card and in
+  // every exported config, where it reads as OUR unfinished work rather than
+  // unified-db's. Dropped at sync time so the schema summary stands alone.
+  const placeholders = parameterNames().filter((n) =>
+    /^(todo|tbd|fixme|xxx|n\/a|none)\.?$/i.test((params[n].long_name ?? '').trim()),
+  );
+  assert.deepEqual(
+    placeholders,
+    [],
+    `placeholder names survived the sync: ${placeholders.join(', ')}`,
+  );
+  // And the fallback is real: a param whose name UDB has not written still says
+  // something useful about itself.
+  assert.equal(params.ASID_WIDTH.long_name, null);
+  assert.match(describeParameter('ASID_WIDTH').summary, /integer/);
+});

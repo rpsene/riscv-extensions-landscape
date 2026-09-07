@@ -57,6 +57,20 @@ function udbCommit() {
 }
 
 /**
+ * 138 of the 228 parameters carry `long_name: TODO` upstream: the field exists,
+ * unified-db has not filled it in yet, and it is not a name. Copying it through
+ * puts the string "TODO" in front of a description in this app's UI and in every
+ * exported config, which reads as OUR placeholder rather than theirs. Recorded as
+ * absent instead, so consumers fall back to the schema summary, which is real.
+ * When upstream fills one in, the next daily sync picks it up.
+ */
+const PLACEHOLDER_NAME = /^(todo|tbd|fixme|xxx|n\/a|none)\.?$/i;
+function longName(value) {
+  const flat = oneLine(value);
+  return flat && !PLACEHOLDER_NAME.test(flat) ? flat : null;
+}
+
+/**
  * BigInt out, JSON-safe in: a Number when it round-trips exactly, otherwise the
  * exact value as a decimal string. Consumers that only display a value need no
  * change; one that computes on a huge bound must notice the string, which is the
@@ -88,7 +102,10 @@ function normalise(value) {
   return value;
 }
 
-const files = fs.readdirSync(paramDir).filter((f) => f.endsWith('.yaml')).sort();
+const files = fs
+  .readdirSync(paramDir)
+  .filter((f) => f.endsWith('.yaml'))
+  .sort();
 const params = {};
 const problems = [];
 
@@ -124,7 +141,7 @@ for (const file of files) {
 
   params[name] = {
     name,
-    long_name: oneLine(doc.long_name),
+    long_name: longName(doc.long_name),
     description: oneLine(doc.description),
     schema: normalise(doc.schema ?? null),
     definedBy: normalise(doc.definedBy ?? null),
@@ -157,7 +174,11 @@ const out = {
   },
   // Sorted so a re-sync of unchanged upstream data produces a byte-identical
   // file and the daily job opens no pull request.
-  params: Object.fromEntries(Object.keys(params).sort().map((k) => [k, params[k]])),
+  params: Object.fromEntries(
+    Object.keys(params)
+      .sort()
+      .map((k) => [k, params[k]]),
+  ),
 };
 
 const dest = path.join(process.cwd(), 'src', 'isa-params.json');

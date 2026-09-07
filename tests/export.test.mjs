@@ -366,3 +366,18 @@ test('every comment line in a UDB export is a single line', () => {
     `comment text leaked onto its own line:\n  ${orphans.join('\n  ')}`,
   );
 });
+
+test('no exported param hint leads with an upstream placeholder', () => {
+  // Distinct from the export's own TODO section, which is deliberate. This is
+  // about `long_name: TODO` leaking from unified-db into a per-param hint, where
+  // it reads as though we left the work unfinished.
+  const yaml = buildIsaConfigYaml(RVA23, ALL, { format: 'udb' }).yaml;
+  const leaked = yaml
+    .split('\n')
+    .filter((l) => /#\s*(TODO|TBD)[;:·]/i.test(l) || /·\s*(TODO|TBD)\b/i.test(l));
+  assert.deepEqual(
+    leaked,
+    [],
+    `placeholder names leaked into the export:\n  ${leaked.join('\n  ')}`,
+  );
+});
