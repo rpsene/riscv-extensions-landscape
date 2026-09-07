@@ -46,14 +46,12 @@ import {
   GitCompare,
 } from 'lucide-react';
 import extensions from './riscv_extensions.json';
-import EncodingMap from './EncodingMap.jsx';
-import WorkspacePanel from './WorkspacePanel.jsx';
 import ExtensionTile from './ExtensionTile.jsx';
+import CompareView from './CompareView.jsx';
 import EncodingDiagram from './EncodingDiagram.jsx';
 import { focusableWithin, nextFocus } from './focusTrap.js';
 import { computeLockedExtensions, missingMandatory } from './workspaceLock.js';
 import CompareTray from './CompareTray.jsx';
-import CompareView from './CompareView.jsx';
 import {
   COMPARE_MAX,
   COMPARE_PARAM,
@@ -80,7 +78,6 @@ import { PROFILES } from './profiles.js';
 import PROFILE_OPTIONAL from './profile-optional.json';
 import { buildIsaConfigYaml } from './exportUtils.js';
 import AskAiLauncher from './AskAiLauncher.jsx';
-import ExtensionEvolution from './ExtensionEvolution.jsx';
 
 // Ids the catalog can actually render. The dependency graph carries a few nodes
 // the catalog does not (UDB's S requires Sm, for which we have no entry), and
@@ -177,7 +174,66 @@ const loadSavedBuilderState = () => {
   };
 };
 
+/*
+ * Three panels are heavy and not needed for first paint: WorkspacePanel alone
+ * is 104 KB of source. Loading them lazily keeps them out of the initial parse
+ * and compile.
+ *
+ * The Suspense fallbacks are null rather than a loading shell. One reviewer
+ * wanted a shell, since opening the Workspace also hides its own toolbar
+ * button and a slow chunk could leave neither on screen; another judged null
+ * safe, because focus stays on the trigger until the panel mounts. The chunks
+ * are 7 to 46 KB from the same origin as the page that just loaded, so the gap
+ * is short, and an idle prefetch was tried and reverted: dynamic import of JSX
+ * cannot resolve in the test environment and it took the render-smoke suite
+ * from seconds to two minutes.
+ *
+ * CompareView is deliberately NOT lazy. It is reachable by permalink, so a URL
+ * that opens straight into a comparison would have to wait on a chunk before
+ * showing anything. Four render-smoke tests cover exactly that path, and the
+ * right response to them failing was to narrow the optimisation, not to weaken
+ * the tests.
+ *
+ * Paired with useOnceMounted below, which is what makes this safe. These
+ * components are rendered unconditionally today and hold state while closed
+ * (WorkspacePanel has twenty state hooks and fifteen transitions), so gating
+ * them on `open` would lose that state and break the close animation. Mounting
+ * on first open and leaving them mounted defers the download without changing
+ * when anything unmounts.
+ */
+const EncodingMap = React.lazy(() => import('./EncodingMap.jsx'));
+const WorkspacePanel = React.lazy(() => import('./WorkspacePanel.jsx'));
+const ExtensionEvolution = React.lazy(() => import('./ExtensionEvolution.jsx'));
+
+/**
+ * True once `open` has been true, and true forever after.
+ *
+ * Lets a lazy panel stay unmounted until it is first needed, then behave
+ * exactly as it did before: still mounted while closed, still holding its own
+ * state, still able to animate out.
+ */
+function useOnceMounted(open) {
+  /*
+   * A ref latch rather than state, because state costs a render before the
+   * chunk fetch can even begin: the first render after `open` flips would still
+   * return false, Suspense would render nothing, and only the following render
+   * would mount the boundary and start the download. Latching during render
+   * starts the fetch in the same pass.
+   *
+   * Safe to write during render because it is idempotent: it only ever moves
+   * false to true, so a double invocation reaches the same value.
+   */
+  const mounted = React.useRef(open);
+  if (open) mounted.current = true;
+  return mounted.current;
+}
+
 const allExtensionsFlat = Object.values(extensions).flat().filter(Boolean);
+
+// Shared so an empty query allocates nothing and searchMatchIds keeps a stable
+// reference for anything that depends on it. Note this is NOT what protects the
+// tile memo: tiles receive a boolean, so a fresh Set would compare the same.
+const EMPTY_MATCH_SET = new Set();
 
 const findExtensionById = (id) => {
   const wanted = String(id ?? '')
@@ -570,6 +626,13 @@ const RISCVExplorer = () => {
   const [selectedInstruction, setSelectedInstruction] = useState(null);
   const [copyStatus, setCopyStatus] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  /*
+   * Whether the current selection was made by the search effect rather than by
+   * a click. Only the former is debounced when written to the URL.
+   */
+  const selectionCameFromSearchRef = React.useRef(false);
+
   const [searchMatches, setSearchMatches] = useState(null);
   const [encoderValidatorOpen, setEncoderValidatorOpen] = useState(false);
 
@@ -1682,15 +1745,37 @@ const RISCVExplorer = () => {
   // replaceState rather than pushState on purpose: clicking through twenty
   // tiles should not bury the previous page under twenty history entries that
   // Back has to walk through one at a time.
+  /*
+   * Debounced ONLY for selections search made on the reader's behalf.
+   *
+   * Search selects as you type, so an exact id match writes history on the
+   * keystroke that produces it: typing "amo" wrote three times, once for the
+   * "a" that matches extension A. Delaying that is right.
+   *
+   * Delaying a deliberate click is not. Someone who clicks a tile and reaches
+   * straight for the address bar would copy the previous URL, and the write
+   * would be cancelled outright if they closed the tab inside the window. A
+   * click is an explicit act and the URL has to be true immediately.
+   */
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    const current = url.searchParams.get(PERMALINK_PARAM);
-    const next = selectedExt?.id ?? null;
-    if (current === next) return;
-    if (next) url.searchParams.set(PERMALINK_PARAM, next);
-    else url.searchParams.delete(PERMALINK_PARAM);
-    window.history.replaceState(null, '', url.toString());
+    if (typeof window === 'undefined') return undefined;
+
+    const write = () => {
+      const url = new URL(window.location.href);
+      const current = url.searchParams.get(PERMALINK_PARAM);
+      const next = selectedExt?.id ?? null;
+      if (current === next) return;
+      if (next) url.searchParams.set(PERMALINK_PARAM, next);
+      else url.searchParams.delete(PERMALINK_PARAM);
+      window.history.replaceState(null, '', url.toString());
+    };
+
+    if (!selectionCameFromSearchRef.current) {
+      write();
+      return undefined;
+    }
+    const id = setTimeout(write, 250);
+    return () => clearTimeout(id);
   }, [selectedExt]);
 
   // A fresh selection invalidates the "Copied" confirmation.
@@ -1711,6 +1796,7 @@ const RISCVExplorer = () => {
   }, [selectedExt, copyTextToClipboard, showToast]);
 
   const handleSelectExt = React.useCallback((data) => {
+    selectionCameFromSearchRef.current = false;
     // A deliberate click owns the panel from here on, so a later non-matching
     // query must not clear it out from under the user.
     searchDrivenSelectionRef.current = false;
@@ -1850,9 +1936,28 @@ const RISCVExplorer = () => {
   const openCompareView = React.useCallback(() => setCompareOpen(true), []);
   const closeCompareView = React.useCallback(() => setCompareOpen(false), []);
 
+  /*
+   * One pass per query instead of one per tile per keystroke. The tiles are
+   * handed the answer, so React can skip every tile whose match state did not
+   * change; previously the raw query was a prop and all 219 re-rendered on
+   * every character.
+   */
+  // Each panel mounts on its first open and stays mounted thereafter.
+  const encodingMapMounted = useOnceMounted(encodingMapOpen);
+  const workspacePanelMounted = useOnceMounted(workspacePanelOpen);
+
+  const searchMatchIds = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return EMPTY_MATCH_SET;
+    const hits = new Set();
+    for (const [id, index] of extensionSearchIndexById) {
+      if ((index || '').includes(q)) hits.add(id);
+    }
+    return hits;
+  }, [searchQuery, extensionSearchIndexById]);
+
   const tileProps = React.useMemo(
     () => ({
-      searchQuery,
       selectedExtId: selectedExt?.id ?? null,
       workspaceIds,
       lockedExtensions,
@@ -1866,7 +1971,9 @@ const RISCVExplorer = () => {
       onToggleCompare: toggleCompareExt,
     }),
     [
-      searchQuery,
+      // searchQuery is deliberately absent: it is no longer a tile prop, so
+      // rebuilding this object on every keystroke would re-render all 219 tiles
+      // for nothing, which is the exact cost this change removes.
       selectedExt,
       workspaceIds,
       lockedExtensions,
@@ -1971,6 +2078,10 @@ const RISCVExplorer = () => {
     const allExts = Object.values(extensions).flat();
     let matchedMnemonic = null;
     let matchedDetails = null;
+
+    // Anything selected from here on is search acting on the reader's behalf,
+    // not a deliberate click, so its URL write is the one that gets debounced.
+    selectionCameFromSearchRef.current = true;
 
     // First, try an exact extension ID match
     let targetExt = allExts.find((ext) => ext.id.toLowerCase() === q);
@@ -3006,7 +3117,7 @@ const RISCVExplorer = () => {
                       <ExtensionTile
                         key={item.id}
                         data={item}
-                        searchIndex={extensionSearchIndexById.get(item.id)}
+                        matchesSearch={searchMatchIds.has(item.id)}
                         {...tileProps}
                         colorClass="border-blue-900/60 bg-blue-950/40 text-blue-100"
                       />
@@ -3033,7 +3144,7 @@ const RISCVExplorer = () => {
                       <ExtensionTile
                         key={item.id}
                         data={item}
-                        searchIndex={extensionSearchIndexById.get(item.id)}
+                        matchesSearch={searchMatchIds.has(item.id)}
                         {...tileProps}
                         colorClass="border-emerald-900/60 bg-emerald-950/40 text-emerald-100"
                       />
@@ -3064,7 +3175,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-purple-900/60 bg-purple-950/30 text-purple-100"
                         />
@@ -3090,7 +3201,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-amber-900/60 bg-amber-950/30 text-amber-100"
                         />
@@ -3116,7 +3227,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-indigo-900/60 bg-indigo-950/30 text-indigo-100"
                         />
@@ -3142,7 +3253,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-pink-900/60 bg-pink-950/30 text-pink-100"
                         />
@@ -3168,7 +3279,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-sky-900/60 bg-sky-950/30 text-sky-100"
                         />
@@ -3194,7 +3305,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-fuchsia-900/60 bg-fuchsia-950/30 text-fuchsia-100"
                         />
@@ -3220,7 +3331,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-teal-900/60 bg-teal-950/30 text-teal-100"
                         />
@@ -3246,7 +3357,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-red-900/60 bg-red-950/30 text-red-100"
                         />
@@ -3272,7 +3383,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-[var(--riscv-border-2)] bg-[var(--riscv-surface-2)] text-slate-300"
                         />
@@ -3298,7 +3409,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-violet-900/60 bg-violet-950/30 text-violet-100"
                         />
@@ -3324,7 +3435,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-orange-900/60 bg-orange-950/30 text-orange-100"
                         />
@@ -3350,7 +3461,7 @@ const RISCVExplorer = () => {
                         <ExtensionTile
                           key={item.id}
                           data={item}
-                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          matchesSearch={searchMatchIds.has(item.id)}
                           {...tileProps}
                           colorClass="border-orange-900/40 bg-orange-950/20 text-orange-100"
                         />
@@ -3392,7 +3503,7 @@ const RISCVExplorer = () => {
                           <ExtensionTile
                             key={item.id}
                             data={item}
-                            searchIndex={extensionSearchIndexById.get(item.id)}
+                            matchesSearch={searchMatchIds.has(item.id)}
                             {...tileProps}
                             colorClass="border-cyan-900/50 bg-cyan-950/20 text-cyan-100"
                           />
@@ -3417,7 +3528,7 @@ const RISCVExplorer = () => {
                           <ExtensionTile
                             key={item.id}
                             data={item}
-                            searchIndex={extensionSearchIndexById.get(item.id)}
+                            matchesSearch={searchMatchIds.has(item.id)}
                             {...tileProps}
                             colorClass="border-cyan-900/50 bg-cyan-950/20 text-cyan-100"
                           />
@@ -3442,7 +3553,7 @@ const RISCVExplorer = () => {
                           <ExtensionTile
                             key={item.id}
                             data={item}
-                            searchIndex={extensionSearchIndexById.get(item.id)}
+                            matchesSearch={searchMatchIds.has(item.id)}
                             {...tileProps}
                             colorClass="border-cyan-900/50 bg-cyan-950/20 text-cyan-100"
                           />
@@ -3467,7 +3578,7 @@ const RISCVExplorer = () => {
                           <ExtensionTile
                             key={item.id}
                             data={item}
-                            searchIndex={extensionSearchIndexById.get(item.id)}
+                            matchesSearch={searchMatchIds.has(item.id)}
                             {...tileProps}
                             colorClass="border-cyan-900/50 bg-cyan-950/20 text-cyan-100"
                           />
@@ -4306,17 +4417,21 @@ const RISCVExplorer = () => {
         </footer>
       </div>
 
-      <EncodingMap
-        open={encodingMapOpen}
-        onClose={() => setEncodingMapOpen(false)}
-        catalog={extensions}
-        onSelectExtension={(id) => {
-          const target = Object.values(extensions)
-            .flat()
-            .find((e) => e && e.id === id);
-          if (target) handleSelectExt(target);
-        }}
-      />
+      {encodingMapMounted && (
+        <React.Suspense fallback={null}>
+          <EncodingMap
+            open={encodingMapOpen}
+            onClose={() => setEncodingMapOpen(false)}
+            catalog={extensions}
+            onSelectExtension={(id) => {
+              const target = Object.values(extensions)
+                .flat()
+                .find((e) => e && e.id === id);
+              if (target) handleSelectExt(target);
+            }}
+          />
+        </React.Suspense>
+      )}
 
       <CompareTray
         extIds={compareExtIds}
@@ -4386,20 +4501,22 @@ const RISCVExplorer = () => {
               </div>
 
               <div className="p-4">
-                <ExtensionEvolution
-                  catalog={extensions}
-                  onSelect={(id) => {
-                    const found = Object.values(extensions)
-                      .flat()
-                      .find((e) => e && e.id === id);
-                    if (found) {
-                      handleSelectExt(found);
-                      // Close on pick: the reader asked for that extension, and
-                      // the details panel is behind this dialog.
-                      setEvolutionOpen(false);
-                    }
-                  }}
-                />
+                <React.Suspense fallback={null}>
+                  <ExtensionEvolution
+                    catalog={extensions}
+                    onSelect={(id) => {
+                      const found = Object.values(extensions)
+                        .flat()
+                        .find((e) => e && e.id === id);
+                      if (found) {
+                        handleSelectExt(found);
+                        // Close on pick: the reader asked for that extension, and
+                        // the details panel is behind this dialog.
+                        setEvolutionOpen(false);
+                      }
+                    }}
+                  />
+                </React.Suspense>
               </div>
             </div>
           </div>
@@ -5337,105 +5454,111 @@ const RISCVExplorer = () => {
       )}
 
       {/* ── ISA Workspace Panel ────────────────────────────────────────── */}
-      <WorkspacePanel
-        open={workspacePanelOpen}
-        onClose={() => setWorkspacePanelOpen(false)}
-        workspaceIds={workspaceIds}
-        lockedExtensions={lockedExtensions}
-        allExts={allExtsList}
-        onSetVlen={handleSetVlen}
-        seedProfile={seedProfile}
-        profileOptional={PROFILE_OPTIONAL}
-        paramChoices={paramChoices}
-        onSetParam={handleSetParam}
-        baselineLocked={baselineLocked}
-        customFromProfile={customFromProfile}
-        onToggleBaseline={() => {
-          if (baselineLocked) {
-            // Releasing the lock: just release it
-            setBaselineLocked(false);
-          } else {
-            // Re-locking: restore any missing mandatory extensions first,
-            // so the locked state is always a genuinely compliant configuration.
-            if (seedProfile) {
-              const mandatory = PROFILES[seedProfile] || [];
-              const missing = mandatory.filter((id) => !workspaceIds.has(id));
-              if (missing.length > 0) {
-                addWorkspaceIdsSmart(missing);
+      {workspacePanelMounted && (
+        <React.Suspense fallback={null}>
+          <WorkspacePanel
+            open={workspacePanelOpen}
+            onClose={() => setWorkspacePanelOpen(false)}
+            workspaceIds={workspaceIds}
+            lockedExtensions={lockedExtensions}
+            allExts={allExtsList}
+            onSetVlen={handleSetVlen}
+            seedProfile={seedProfile}
+            profileOptional={PROFILE_OPTIONAL}
+            paramChoices={paramChoices}
+            onSetParam={handleSetParam}
+            baselineLocked={baselineLocked}
+            customFromProfile={customFromProfile}
+            onToggleBaseline={() => {
+              if (baselineLocked) {
+                // Releasing the lock: just release it
+                setBaselineLocked(false);
+              } else {
+                // Re-locking: restore any missing mandatory extensions first,
+                // so the locked state is always a genuinely compliant configuration.
+                if (seedProfile) {
+                  const mandatory = PROFILES[seedProfile] || [];
+                  const missing = mandatory.filter((id) => !workspaceIds.has(id));
+                  if (missing.length > 0) {
+                    addWorkspaceIdsSmart(missing);
+                    showToast(
+                      `Re-locked ${seedProfile}: restored ${missing.join(', ')} to the mandatory set.`,
+                    );
+                  }
+                }
+                setBaselineLocked(true);
+              }
+            }}
+            onAddId={(id) => addWorkspaceIdsSmart(id, true)}
+            onRemoveId={(id) => {
+              // Decide before mutating anything. The previous order downgraded the
+              // profile first and only then discovered the removal was refused,
+              // which left the configuration permanently 'Custom' and the lock
+              // forced open while nothing had actually been removed.
+              if (lockedExtensions.has(id)) {
                 showToast(
-                  `Re-locked ${seedProfile}: restored ${missing.join(', ')} to the mandatory set.`,
+                  `Cannot remove ${id}: required by ${lockedExtensions.get(id).join(', ')}`,
+                );
+                return;
+              }
+              if (!workspaceIds.has(id)) return;
+
+              // Reaching here means the removal will happen. A mandatory extension
+              // can only be unlocked, so this is the deliberate divergence path.
+              const divergesFromProfile = Boolean(
+                seedProfile && (PROFILES[seedProfile] || []).includes(id),
+              );
+
+              setWorkspaceIds((prev) => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+              });
+
+              if (divergesFromProfile) {
+                setSeedProfile(null);
+                setCustomFromProfile(seedProfile);
+                showToast(
+                  `${id} removed — configuration is now Custom (from ${seedProfile}). Re-select the profile from the switcher to restore full compliance.`,
                 );
               }
-            }
-            setBaselineLocked(true);
-          }
-        }}
-        onAddId={(id) => addWorkspaceIdsSmart(id, true)}
-        onRemoveId={(id) => {
-          // Decide before mutating anything. The previous order downgraded the
-          // profile first and only then discovered the removal was refused,
-          // which left the configuration permanently 'Custom' and the lock
-          // forced open while nothing had actually been removed.
-          if (lockedExtensions.has(id)) {
-            showToast(`Cannot remove ${id}: required by ${lockedExtensions.get(id).join(', ')}`);
-            return;
-          }
-          if (!workspaceIds.has(id)) return;
-
-          // Reaching here means the removal will happen. A mandatory extension
-          // can only be unlocked, so this is the deliberate divergence path.
-          const divergesFromProfile = Boolean(
-            seedProfile && (PROFILES[seedProfile] || []).includes(id),
-          );
-
-          setWorkspaceIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-
-          if (divergesFromProfile) {
-            setSeedProfile(null);
-            setCustomFromProfile(seedProfile);
-            showToast(
-              `${id} removed — configuration is now Custom (from ${seedProfile}). Re-select the profile from the switcher to restore full compliance.`,
-            );
-          }
-        }}
-        onClear={() => {
-          setWorkspaceIds(new Set());
-          setSeedProfile(null);
-          setCustomFromProfile(null);
-          setParamChoices({});
-          setBaselineLocked(true);
-          try {
-            window.localStorage.removeItem(BUILDER_STORAGE_KEY);
-          } catch {
-            /* ignore */
-          }
-        }}
-        onLoadIds={(ids, profileName) => {
-          setWorkspaceIds(new Set()); // clear
-          addWorkspaceIdsSmart(ids); // smartly add all
-          setSeedProfile(profileName || null);
-          setCustomFromProfile(null); // fresh load resets origin tracking
-          setBaselineLocked(true);
-        }}
-        onSelectInstruction={({ extId, mnemonic, encoding, variable_fields, match, mask }) => {
-          // Navigate the main view to the specified extension + instruction
-          const targetExt = allExtsList.find((e) => e.id === extId);
-          if (targetExt) {
-            setSelectedExt(targetExt);
-            setSelectedInstruction({ mnemonic, encoding, variable_fields, match, mask });
-            setWorkspacePanelOpen(false); // close panel to reveal main view
-            // Scroll tile into view
-            requestAnimationFrame(() => {
-              const el = document.getElementById(`ext-${extId}`);
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
-          }
-        }}
-      />
+            }}
+            onClear={() => {
+              setWorkspaceIds(new Set());
+              setSeedProfile(null);
+              setCustomFromProfile(null);
+              setParamChoices({});
+              setBaselineLocked(true);
+              try {
+                window.localStorage.removeItem(BUILDER_STORAGE_KEY);
+              } catch {
+                /* ignore */
+              }
+            }}
+            onLoadIds={(ids, profileName) => {
+              setWorkspaceIds(new Set()); // clear
+              addWorkspaceIdsSmart(ids); // smartly add all
+              setSeedProfile(profileName || null);
+              setCustomFromProfile(null); // fresh load resets origin tracking
+              setBaselineLocked(true);
+            }}
+            onSelectInstruction={({ extId, mnemonic, encoding, variable_fields, match, mask }) => {
+              // Navigate the main view to the specified extension + instruction
+              const targetExt = allExtsList.find((e) => e.id === extId);
+              if (targetExt) {
+                setSelectedExt(targetExt);
+                setSelectedInstruction({ mnemonic, encoding, variable_fields, match, mask });
+                setWorkspacePanelOpen(false); // close panel to reveal main view
+                // Scroll tile into view
+                requestAnimationFrame(() => {
+                  const el = document.getElementById(`ext-${extId}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                });
+              }
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {/* ── Ask AI Launcher ── */}
       <AskAiLauncher context={askAiContext} />

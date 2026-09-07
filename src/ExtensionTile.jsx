@@ -28,8 +28,7 @@ import { tilePropsAreEqual } from './tileMemo.js';
 function ExtensionTile({
   data,
   colorClass,
-  searchQuery,
-  searchIndex,
+  matchesSearch,
   selectedExtId,
   workspaceIds,
   compareIds,
@@ -42,9 +41,6 @@ function ExtensionTile({
   onToggleWorkspace,
   onToggleCompare,
 }) {
-  const q = searchQuery.trim().toLowerCase();
-  const matchesSearch = q.length ? (searchIndex || '').includes(q) : false;
-
   const isDiscontinued = data.discontinued === 1;
   const isSelected = selectedExtId === data.id;
   const highlighted = isHighlighted(data.id) || matchesSearch || isSelected;
