@@ -34,7 +34,7 @@ const entries = [];
     if (node.id && node.desc) entries.push(node);
     Object.values(node).forEach(collect);
   }
-}(catalog));
+})(catalog);
 
 const instructionCount = (e) => Object.keys(e.instructions || {}).length;
 const csrCount = (e) => Object.keys(e.csrs || {}).length;
@@ -53,9 +53,10 @@ test('every tagged extension yields instructions or CSRs', () => {
     .map((e) => `${e.id} [${e.tags.join(', ')}]`);
 
   assert.deepEqual(
-    barren, [],
-    'these entries carry tags that resolved to nothing, so the tag is wrong or upstream renamed it:\n  '
-      + barren.join('\n  '),
+    barren,
+    [],
+    'these entries carry tags that resolved to nothing, so the tag is wrong or upstream renamed it:\n  ' +
+      barren.join('\n  '),
   );
 });
 
@@ -67,7 +68,11 @@ test('every umbrella resolves to instructions', () => {
     .filter((e) => instructionCount(e) === 0)
     .map((e) => `${e.id} <- ${e.members.join(', ')}`);
 
-  assert.deepEqual(hollow, [], `umbrella extensions resolved to no instructions:\n  ${hollow.join('\n  ')}`);
+  assert.deepEqual(
+    hollow,
+    [],
+    `umbrella extensions resolved to no instructions:\n  ${hollow.join('\n  ')}`,
+  );
 });
 
 test('umbrella members all exist', () => {
@@ -76,7 +81,11 @@ test('umbrella members all exist', () => {
   for (const e of entries) {
     for (const m of e.members || []) if (!ids.has(m)) dangling.push(`${e.id} -> ${m}`);
   }
-  assert.deepEqual(dangling, [], `umbrella members that are not catalogue entries:\n  ${dangling.join('\n  ')}`);
+  assert.deepEqual(
+    dangling,
+    [],
+    `umbrella members that are not catalogue entries:\n  ${dangling.join('\n  ')}`,
+  );
 });
 
 test('CSR coverage does not regress', () => {
@@ -131,9 +140,16 @@ test('no unratified draft instructions are published', () => {
   // first four rv_zbb / rv64_zbb, so they appeared inside a ratified extension.
   // Zbp was never ratified at all: it is 404 upstream and absent from UDB.
   const withdrawn = [
-    'SLO', 'SLOI', 'SRO', 'SROI',                       // draft Zbb shift-ones
-    'GORCI', 'GREVI', 'SHFLI', 'UNSHFLI',               // draft Zbp
-    'XPERM16', 'XPERM32',                               // draft Zbp
+    'SLO',
+    'SLOI',
+    'SRO',
+    'SROI', // draft Zbb shift-ones
+    'GORCI',
+    'GREVI',
+    'SHFLI',
+    'UNSHFLI', // draft Zbp
+    'XPERM16',
+    'XPERM32', // draft Zbp
   ];
   const published = [];
   for (const e of entries) {
@@ -142,7 +158,8 @@ test('no unratified draft instructions are published', () => {
     }
   }
   assert.deepEqual(
-    published, [],
+    published,
+    [],
     `these instructions were withdrawn before ratification and must not ship:\n  ${published.join('\n  ')}`,
   );
 });
@@ -151,9 +168,25 @@ test('Zbb matches the ratified instruction set', () => {
   // The concrete symptom of the above: Zbb read 28 instructions instead of 24.
   const zbb = entries.find((e) => e.id === 'Zbb');
   assert.ok(zbb, 'Zbb is missing from the catalogue');
+  // Counted as architectural instructions. ZEXT.H encodes differently per width
+  // (pack on RV32, packw on RV64) so it is carried as ZEXT.H + ZEXT.H.RV32, the
+  // same pairing REV8 already uses. That is two rows and one instruction, and
+  // this count is a count of the spec's instructions.
+  const architectural = new Set(
+    Object.keys(zbb.instructions || {}).map((m) => m.replace(/\.RV(32|64)$/, '')),
+  );
+  assert.equal(architectural.size, 24, 'ratified Zbb has 24 instructions across RV32 and RV64');
+});
+
+test('Zbb carries both width-specific encodings of ZEXT.H', () => {
+  // The RV32 encoding sat under the plain name with an rv_zbb tag claiming both
+  // widths, so an RV64 lookup of ZEXT.H returned pack's bits rather than packw's.
+  const zbb = entries.find((e) => e.id === 'Zbb');
+  assert.equal(zbb.instructions['ZEXT.H'].match, '0x800403b', 'RV64 ZEXT.H is packw rd, rs1, x0');
   assert.equal(
-    Object.keys(zbb.instructions || {}).length, 24,
-    'ratified Zbb has 24 instructions across RV32 and RV64',
+    zbb.instructions['ZEXT.H.RV32'].match,
+    '0x8004033',
+    'RV32 ZEXT.H is pack rd, rs1, x0',
   );
 });
 
@@ -181,7 +214,8 @@ test('extensions that define no new opcodes carry their pseudo-instructions', ()
     // base instruction reads as a data error rather than as a fact.
     for (const [mnemonic, details] of instructions) {
       assert.equal(
-        details.alias_of, alias,
+        details.alias_of,
+        alias,
         `${id}.${mnemonic} should record alias_of ${alias}, got ${details.alias_of ?? 'nothing'}`,
       );
     }
@@ -213,8 +247,8 @@ test('a mnemonic never carries two different encodings', () => {
         const widthOnly = XLEN_VARIANTS.has(m.toUpperCase()) && prev.match === d.match;
         assert.ok(
           widthOnly,
-          `${m} has two different encodings: ${prev.ext} says ${prev.match}/${prev.mask}, `
-          + `${e.id} says ${d.match}/${d.mask}`,
+          `${m} has two different encodings: ${prev.ext} says ${prev.match}/${prev.mask}, ` +
+            `${e.id} says ${d.match}/${d.mask}`,
         );
         continue;
       }
@@ -237,7 +271,8 @@ test('ratification labelling does not regress', () => {
   for (const e of labelled) {
     if (!e.ratification_date) continue;
     assert.match(
-      String(e.ratification_date), /^\d{4}-\d{2}$/,
+      String(e.ratification_date),
+      /^\d{4}-\d{2}$/,
       `${e.id} has ratification_date ${e.ratification_date}, expected YYYY-MM`,
     );
   }
@@ -318,7 +353,7 @@ test('RV128I is not labelled ratified, because it is not', () => {
   assert.match(rv128.url, /rv128\.html$/, 'it should link to its own chapter');
 });
 
-test('RV128I does not borrow another extension\'s instruction set', () => {
+test("RV128I does not borrow another extension's instruction set", () => {
   // It carried RV64I's 52 instructions verbatim, each stamped extension
   // ["rv64_i"], and none of the instructions RV128 actually defines — LQ, SQ,
   // LDU, or the *D family. Neither riscv-opcodes nor riscv-unified-db models
@@ -354,10 +389,7 @@ test('an instruction with two owners is attributed to both', () => {
   });
 
   for (const entry of owners) {
-    assert.ok(
-      entry.instructions?.SCTRCLR,
-      `${entry.id} defines SCTRCLR and must carry it`,
-    );
+    assert.ok(entry.instructions?.SCTRCLR, `${entry.id} defines SCTRCLR and must carry it`);
   }
 
   assert.deepEqual(
@@ -394,7 +426,11 @@ test('optional and mandatory sets do not overlap', () => {
     if (!block) continue;
     const mandatory = new Set([...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
     const both = list.filter((id) => mandatory.has(id));
-    assert.deepEqual(both, [], `${profile} lists ${both.join(', ')} as both mandatory and optional`);
+    assert.deepEqual(
+      both,
+      [],
+      `${profile} lists ${both.join(', ')} as both mandatory and optional`,
+    );
   }
 });
 

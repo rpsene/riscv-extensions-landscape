@@ -7,6 +7,7 @@ import {
   parseUpstream,
   parseVariables,
   applyNotConstraints,
+  parseEncodings,
   EXTENSION_ALIASES,
 } from '../scripts/check-udb-completeness.mjs';
 
@@ -192,4 +193,71 @@ encoding:
   assert.equal(vars.length, 2);
   assert.deepEqual(vars[0].not, [0, 1, 2, 3, 4, 5]);
   assert.deepEqual(vars[1].not, []);
+});
+
+// ── XLEN-keyed encodings ───────────────────────────────────────────────────
+
+test('an XLEN-keyed encoding yields one entry per XLEN', () => {
+  /*
+   * unified-db writes 19 instructions with encodings keyed by XLEN, rev8 among
+   * them. Taking the first `match:` in the file read one of the two, and it did
+   * so for exactly the instructions where RV32 and RV64 diverge -- the shifts,
+   * ld/sd, the Zbs single-bit ops -- so the gate compared half the data for the
+   * cases most likely to disagree.
+   */
+  const encs = parseEncodings(`
+encoding:
+  RV32:
+    match: 011010011000-----101-----0010011
+    variables:
+      - name: xs1
+        location: 19-15
+  RV64:
+    match: 011010111000-----101-----0010011
+    variables:
+      - name: xs1
+        location: 19-15
+access:
+  s: always
+`);
+  assert.equal(encs.length, 2);
+  assert.deepEqual(
+    encs.map((e) => e.xlen),
+    ['RV32', 'RV64'],
+  );
+  assert.equal(encs[0].match, 0x69805013n, 'the RV32 form');
+  assert.equal(encs[1].match, 0x6b805013n, 'the RV64 form');
+});
+
+test('a plain encoding yields exactly one entry, with no xlen', () => {
+  const encs = parseEncodings(`
+encoding:
+  match: 0000000----------000-----0110011
+  variables:
+    - name: xs2
+      location: 24-20
+`);
+  assert.equal(encs.length, 1);
+  assert.equal(encs[0].xlen, null);
+});
+
+test('not: constraints are folded per XLEN block, not across them', () => {
+  const encs = parseEncodings(`
+encoding:
+  RV32:
+    match: 0000000------------------0110011
+    variables:
+      - name: tt
+        location: 14-12
+        not: [0, 2, 3, 4, 5, 6, 7]
+  RV64:
+    match: 0000000------------------0110011
+    variables:
+      - name: tt
+        location: 14-12
+`);
+  assert.equal(encs.length, 2);
+  const RM = 0x7n << 12n;
+  assert.equal(encs[0].mask & RM, RM, 'RV32 pins tt via not:');
+  assert.equal(encs[1].mask & RM, 0n, 'RV64 leaves it free');
 });

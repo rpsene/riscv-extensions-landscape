@@ -113,6 +113,94 @@ export function parseVariables(text) {
   return out;
 }
 
+/**
+ * The indented body of a top-level YAML key, by scanning lines.
+ *
+ * Deliberately not a regex. Three separate bugs today came from trying to
+ * express "up to the next line at column zero" as a lookahead: /$/m is the end
+ * of the FIRST line, so the capture came back empty, and /(?=^\S)/m silently
+ * matches nothing when the block runs to the end of the file. Scanning lines
+ * has neither failure mode.
+ */
+function blockUnder(text, key) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((l) => l === `${key}:`);
+  if (start === -1) return null;
+  const body = [];
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.trim() !== '' && !/^\s/.test(line)) break;
+    body.push(line);
+  }
+  return body.join('\n');
+}
+
+/**
+ * The encodings an instruction file declares, one per XLEN where it has two.
+ *
+ * unified-db writes most instructions with a single `encoding.match`, but 19 of
+ * them differ by XLEN and are keyed instead:
+ *
+ *   encoding:
+ *     RV32:
+ *       match: 011010011000-----101-----0010011
+ *     RV64:
+ *       match: 011010111000-----101-----0010011
+ *
+ * Taking the first `match:` in the file silently read one of the two. That
+ * covered exactly the instructions where RV32 and RV64 diverge -- rev8, rori,
+ * ld, sd, the shift-immediates, the Zbs single-bit ops -- so the gate compared
+ * against half the data for the cases most likely to disagree, and reported
+ * rev8 as an encoding this catalogue got wrong when it carries both.
+ */
+export function parseEncodings(text) {
+  const bitsToPair = (bits) => {
+    let match = 0n;
+    let mask = 0n;
+    for (const ch of bits) {
+      match <<= 1n;
+      mask <<= 1n;
+      if (ch === '1') {
+        match |= 1n;
+        mask |= 1n;
+      } else if (ch === '0') {
+        mask |= 1n;
+      }
+    }
+    return { match, mask };
+  };
+
+  const body = blockUnder(text, 'encoding');
+  if (body === null) return [];
+
+  // Scanned, not matched, for the same reason blockUnder exists: a lookahead
+  // for "the next XLEN key or the end" needs an end assertion that /$/m does
+  // not provide, and gets it silently wrong rather than loudly.
+  const lines = body.split('\n');
+  const keyed = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const head = lines[i].match(/^\s{2}(RV32|RV64):\s*$/);
+    if (!head) continue;
+    const collected = [];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (/^\s{2}(RV32|RV64):\s*$/.test(lines[j])) break;
+      collected.push(lines[j]);
+    }
+    keyed.push({ xlen: head[1], text: collected.join('\n') });
+  }
+  const blocks = keyed.length ? keyed : [{ xlen: null, text: body }];
+
+  const out = [];
+  for (const block of blocks) {
+    const bits = block.text.match(/^\s*match:\s*([01-]+)\s*$/m);
+    if (!bits) continue;
+    const pair = bitsToPair(bits[1]);
+    const folded = applyNotConstraints(pair, parseVariables(block.text));
+    out.push({ xlen: block.xlen, ...folded });
+  }
+  return out;
+}
+
 export function parseUpstream(specDir) {
   const readDefinedBy = (text) => {
     /*
@@ -127,8 +215,8 @@ export function parseUpstream(specDir) {
      * Capture every indented line under it, up to the next key at column zero,
      * then take each `name:`.
      */
-    const block = text.match(/^definedBy:\n([\s\S]*?)(?=^\S)/m);
-    return block ? [...block[1].matchAll(/name:\s*([A-Za-z0-9_.]+)/g)].map((x) => x[1]) : [];
+    const block = blockUnder(text, 'definedBy');
+    return block ? [...block.matchAll(/name:\s*([A-Za-z0-9_.]+)/g)].map((x) => x[1]) : [];
   };
 
   const extDir = path.join(specDir, 'ext');
@@ -153,34 +241,22 @@ export function parseUpstream(specDir) {
     for (const file of fs.readdirSync(sub).filter((f) => f.endsWith('.yaml'))) {
       const text = fs.readFileSync(path.join(sub, file), 'utf8');
       const name = text.match(/^name:\s*(.+?)\s*$/m);
-      // unified-db gives an encoding string of 0/1/- rather than match/mask.
-      const enc = text.match(/^\s*match:\s*([01-]+)\s*$/m);
-      if (!enc) continue;
-      let match = 0n;
-      let mask = 0n;
-      for (const ch of enc[1]) {
-        match <<= 1n;
-        mask <<= 1n;
-        if (ch === '1') {
-          match |= 1n;
-          mask |= 1n;
-        } else if (ch === '0') {
-          mask |= 1n;
-        }
-      }
-      // Fold in any `not:` that pins a field to a single value.
-      const folded = applyNotConstraints({ match, mask }, parseVariables(text));
-
+      const mnemonic = (name ? name[1] : file.replace(/\.yaml$/, '')).toUpperCase();
       const owners = readDefinedBy(text);
-      instructions.push({
-        mnemonic: (name ? name[1] : file.replace(/\.yaml$/, '')).toUpperCase(),
-        match: folded.match,
-        mask: folded.mask,
-        narrowedFields: folded.narrowed,
-        // Fall back to the directory only when the file names no owner. An
-        // empty array is truthy, so `|| [dir]` silently kept the empty list.
-        definedBy: owners.length ? owners : [dir],
-      });
+
+      // One entry per declared encoding: two where the file is XLEN-keyed.
+      for (const enc of parseEncodings(text)) {
+        instructions.push({
+          mnemonic,
+          xlen: enc.xlen,
+          match: enc.match,
+          mask: enc.mask,
+          narrowedFields: enc.narrowed,
+          // Fall back to the directory only when the file names no owner. An
+          // empty array is truthy, so `|| [dir]` silently kept the empty list.
+          definedBy: owners.length ? owners : [dir],
+        });
+      }
     }
   }
 

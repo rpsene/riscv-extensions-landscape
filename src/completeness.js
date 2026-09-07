@@ -76,6 +76,27 @@ export function isOrderingRefinement(local, upstream) {
   return extra !== 0n && (extra & ~ORDERING_BITS) === 0n;
 }
 
+/**
+ * Is `local` a variant spelling of the same instruction as `upstream`?
+ *
+ * Coverage by a differently-named row is only meaningful for names that denote
+ * the SAME instruction spelled differently: an ordering suffix upstream
+ * enumerates and we fold into the base row, or an XLEN suffix we use where
+ * upstream keys the encoding by XLEN instead.
+ *
+ * Anything looser is dangerous. Letting any broader pattern in the same
+ * extension claim coverage reported C.ADDIW as covered by C.JAL and C.JALR by
+ * C.ADD -- different instructions that merely share an encoding slot -- and
+ * ZEXT.H as covered by PACKW, which it is only because zext.h is packw with
+ * rs2 = 0. A completeness gate that accepts those is reporting a catalogue
+ * complete because somebody else's bits happen to be a superset.
+ */
+export function isVariantSpelling(local, upstream) {
+  const strip = (m) => m.replace(/\.(AQRL|AQ|RL)$/, '').replace(/\.(RV32|RV64)$/, '');
+  if (local === upstream) return true;
+  return strip(local) === strip(upstream) && strip(local).length > 0;
+}
+
 /** Every instruction in the catalogue, flattened, keeping its owning entry. */
 export function flattenCatalogue(catalogue) {
   const rows = [];
@@ -186,12 +207,47 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
     const owners = (inst.definedBy || []).flatMap(aliasesFor);
     const candidates = owners.flatMap((o) => byExtension.get(o) || []);
 
-    const exact = candidates.find((c) => c.mnemonic === mnemonic);
-    const covering = candidates.find((c) => patternCovers(c, inst));
+    /*
+     * ANY row with this mnemonic that covers the encoding settles it, not the
+     * first one found.
+     *
+     * Upstream declares two encodings for the shift-immediates, one per XLEN,
+     * and this catalogue carries them as separate rows: RV32I pins bit 25
+     * because the shamt is five bits, RV64I leaves it free for the sixth. With
+     * a first-match rule the RV64 encoding was compared against the RV32I row
+     * and reported as a disagreement, when the matching row was sitting right
+     * beside it.
+     */
+    const named = candidates.filter((c) => c.mnemonic === mnemonic);
+    const covering = candidates.find(
+      (c) => patternCovers(c, inst) && isVariantSpelling(c.mnemonic, mnemonic),
+    );
 
-    if (exact && patternCovers(exact, inst)) continue;
+    /*
+     * Coverage is decided before naming. A row that carries the bits covers the
+     * encoding whatever it is called, and only when NOTHING covers it does the
+     * name become evidence of a disagreement.
+     *
+     * rev8 is why. Upstream declares both XLEN encodings under one name; this
+     * catalogue follows riscv-opcodes and splits them into REV8 and REV8.RV32,
+     * the latter filed under Zbkb. Checking the same-named row first found REV8,
+     * saw the RV64 bits, and reported a mismatch without ever looking at
+     * REV8.RV32 sitting beside it with exactly the encoding in question.
+     */
+    if (covering) {
+      if (covering.mnemonic !== mnemonic) {
+        coveredByBroaderRow.push({
+          upstream: mnemonic,
+          coveredBy: covering.mnemonic,
+          extension: covering.extension,
+          orderingOnly: isOrderingRefinement(covering, inst),
+        });
+      }
+      continue;
+    }
 
-    if (exact && !patternCovers(exact, inst)) {
+    const exact = named[0];
+    if (exact) {
       // The name is here but the bits disagree: either we pin something
       // upstream leaves free, or we pin it to a different value.
       /*
@@ -212,16 +268,6 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
       continue;
     }
 
-    if (covering) {
-      coveredByBroaderRow.push({
-        upstream: mnemonic,
-        coveredBy: covering.mnemonic,
-        extension: covering.extension,
-        orderingOnly: isOrderingRefinement(covering, inst),
-      });
-      continue;
-    }
-
     /*
      * Before calling it missing, check whether we carry the encoding at all,
      * just filed elsewhere. AMOCAS.B is the case that forced this: unified-db
@@ -233,7 +279,9 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
      * absent. The encoding check still applies, so this cannot quietly match
      * Zalasr's LB.AQ against the base ISA's LB: their bits differ.
      */
-    const elsewhere = local.find((c) => patternCovers(c, inst));
+    const elsewhere = local.find(
+      (c) => patternCovers(c, inst) && isVariantSpelling(c.mnemonic, mnemonic),
+    );
     if (elsewhere) {
       attributedDifferently.push({
         mnemonic,
