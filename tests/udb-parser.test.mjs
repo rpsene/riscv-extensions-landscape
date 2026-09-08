@@ -355,3 +355,34 @@ test('an unrecognised shape yields no predicate rather than a wrong one', () => 
   assert.equal(predicate, null, 'degrade to the flat list rather than invent a condition');
   assert.deepEqual(owners, []);
 });
+
+test('CRLF line endings: blockUnder body lines have \\r stripped so parseDefinedBy works', () => {
+  /*
+   * blockUnder joins body lines with '\n'. On CRLF checkouts each body line
+   * ends with '\r', so the joined output contains trailing \r characters.
+   * parseDefinedBy splits on '\n' again, giving lines like '  extension:\r'
+   * which parseMapping cannot match. Body lines must have \r stripped.
+   */
+  // Construct the block as blockUnder would return it from a CRLF checkout
+  const crlfBlock = '  extension:\r\n    name: Zbb\r\n';
+  const { owners } = parseDefinedBy(crlfBlock);
+  assert.deepEqual(owners, ['Zbb'], 'CRLF body: \\r must be stripped before parseDefinedBy sees the lines');
+});
+
+test('CRLF line endings: parseVariables returns all fields on Windows checkouts', () => {
+  /*
+   * parseVariables used `variables:\n` in its regex. On CRLF files the text is
+   * `variables:\r\n`, so the match fails and returns []. This silently drops
+   * every not: constraint that #303 added, mis-reporting pinned fields as free bits.
+   */
+  const crlfText =
+    'encoding:\r\n  match: 0000011------------------0001011\r\n' +
+    '  variables:\r\n    - name: rs1\r\n      location: 19-15\r\n' +
+    '    - name: tt\r\n      location: 14-12\r\n      not: [0, 2, 3, 4, 5, 6, 7]\r\n';
+  const vars = parseVariables(crlfText);
+  assert.equal(vars.length, 2, 'CRLF: parseVariables must find both variable fields');
+  assert.equal(vars[0].name, 'rs1');
+  assert.equal(vars[1].name, 'tt');
+  assert.deepEqual(vars[1].not, [0, 2, 3, 4, 5, 6, 7], 'CRLF: not: list must be parsed from CRLF file');
+});
+
