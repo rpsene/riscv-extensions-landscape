@@ -781,6 +781,27 @@ export function loadSandbox() {
 export function normalizeSandboxExt(ext) {
   if (!ext || typeof ext !== 'object' || !ext.id) return null;
   const isAddition = ext.mode === 'addition';
+
+  let opcode = null;
+  if (typeof ext.opcode === 'number' && Number.isFinite(ext.opcode)) {
+    opcode = ext.opcode;
+  } else if (typeof ext.opcode === 'string' && ext.opcode.trim() !== '') {
+    const trimmed = ext.opcode.trim();
+    const parsed =
+      trimmed.startsWith('0x') || trimmed.startsWith('0X')
+        ? parseInt(trimmed, 16)
+        : parseInt(trimmed, 10);
+    if (Number.isFinite(parsed)) {
+      opcode = parsed;
+    }
+  }
+
+  // An addition proposal requires a valid numeric opcode; drop it if absent/invalid
+  if (isAddition && opcode == null) {
+    return null;
+  }
+  const finalOpcode = opcode ?? 0x0b;
+
   const rawId = String(ext.id);
   const enforcedId = enforcePrefix(rawId, !!ext.isOfficial, isAddition);
   return {
@@ -794,7 +815,7 @@ export function normalizeSandboxExt(ext) {
     isOfficial: !!ext.isOfficial,
     name: String(ext.name || ''),
     desc: String(ext.desc || ''),
-    opcode: typeof ext.opcode === 'number' ? ext.opcode : isAddition ? 0x57 : 0x0b,
+    opcode: finalOpcode,
     tags:
       Array.isArray(ext.tags) && ext.tags.length > 0
         ? ext.tags.map(String)

@@ -756,3 +756,61 @@ test('OPCODES classifies expanded instruction-length prefixes and validateInstru
     'Must emit error when attempting to place 32-bit instruction in instruction-length space',
   );
 });
+
+test('normalizeSandboxExt drops additions without valid numeric opcode (no 0x57 default)', () => {
+  // An addition missing an opcode must return null, not default to 0x57
+  const badAddition = normalizeSandboxExt({
+    id: 'Zcb__sandbox',
+    mode: 'addition',
+    name: 'Zcb',
+    instructions: [],
+  });
+  assert.equal(badAddition, null, 'Must drop addition missing numeric opcode');
+
+  // Must also drop via deserializeSandbox (simulating untrusted share link)
+  const decoded = deserializeSandbox(
+    btoa('[{"id":"Zcb__sandbox","mode":"addition","name":"Zcb","instructions":[]}]'),
+  );
+  assert.deepEqual(decoded, [], 'Must deserialize to empty list when addition lacks valid opcode');
+});
+
+test('normalizeSandboxExt coerces string opcodes and preserves custom defaults', () => {
+  // Decimal numeric string
+  const decAddition = normalizeSandboxExt({
+    id: 'Zba__sandbox',
+    mode: 'addition',
+    opcode: '59',
+    instructions: [],
+  });
+  assert.ok(decAddition);
+  assert.equal(decAddition.opcode, 59);
+
+  // Hex numeric string
+  const hexAddition = normalizeSandboxExt({
+    id: 'Zba__sandbox',
+    mode: 'addition',
+    opcode: '0x3b',
+    instructions: [],
+  });
+  assert.ok(hexAddition);
+  assert.equal(hexAddition.opcode, 0x3b);
+
+  // Custom extension defaults to 0x0b (custom-0) if opcode missing
+  const customDefault = normalizeSandboxExt({
+    id: 'Xcustom',
+    mode: 'custom',
+    instructions: [],
+  });
+  assert.ok(customDefault);
+  assert.equal(customDefault.opcode, 0x0b);
+
+  // Custom extension coerces string opcode if provided
+  const customCoerced = normalizeSandboxExt({
+    id: 'Xcustom',
+    mode: 'custom',
+    opcode: '43', // 0x2b custom-1
+    instructions: [],
+  });
+  assert.ok(customCoerced);
+  assert.equal(customCoerced.opcode, 43);
+});
