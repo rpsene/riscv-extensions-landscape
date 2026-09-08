@@ -90,6 +90,27 @@ const SPLIT_RULES = {
   ],
 
   // Vector FP subsets
+  /*
+   * Zvkb is the bit-manipulation subset the vector-crypto extensions share.
+   * riscv-opcodes has no `rv_zvkb` tag: upstream expresses the sharing by
+   * giving each of these nine forms three memberships (rv_zvbb, rv_zvkn,
+   * rv_zvks) instead. Tag routing therefore files them under Zvbb/Zvkn/Zvks
+   * and leaves Zvkb empty, so the subset has to be named here.
+   *
+   * Source: vector-crypto spec, "Zvkb - Vector Cryptography Bit-manipulation".
+   */
+  Zvkb: [
+    'VANDN.VV',
+    'VANDN.VX',
+    'VBREV8.V',
+    'VREV8.V',
+    'VROL.VV',
+    'VROL.VX',
+    'VROR.VI',
+    'VROR.VV',
+    'VROR.VX',
+  ],
+
   Zvfhmin: ['VFWCVT.F.F.V', 'VFNCVT.F.F.W'],
   Zvfh: [
     'VFADD.VV',
@@ -383,6 +404,138 @@ for (const entry of extEntries) {
     }
   }
   if (populated) tagsPopulated++;
+}
+
+// ---------------------------------------------------------------------------
+// Pass 1a-bis: Zve*, the embedded vector subsets.
+//
+// These five have no upstream instruction source at all. riscv-opcodes has no
+// `rv_zve*` tag (every vector encoding is `rv_v`), and unified-db attributes
+// all 627 of them to a single owner, Zvl32b. Neither says which instructions
+// each subset carries. The dependency graph cannot supply them either: V
+// *requires* Zve64d, so closure runs upward from the subsets to V and never
+// back down. Left alone, every Zve* tile reads "0 instructions", which is
+// wrong — Zve32x has hundreds.
+//
+// So the sets are derived here, from V, by the rules the specification states
+// in unpriv §30.1.18.2 ("Zve*: Vector Extensions for Embedded Processors").
+// That section does not enumerate mnemonics; it gives a table of supported
+// EEWs and FP types per extension, then says each subset supports *all*
+// configuration, load/store, integer, fixed-point, reduction, mask and
+// permutation instructions, carving out only what the EEW/FP limits exclude.
+// The rule applied below is that framing, made mechanical:
+//
+//   a mnemonic belongs to an extension iff at least one legal (SEW, EEW)
+//   configuration of it exists under that extension's supported EEW set and
+//   floating-point types.
+//
+// This is a DERIVATION, not a transcription — no upstream list exists to sync
+// against, and neither `npm run udb:check` nor the completeness gate can catch
+// an error in it. tests/zve-subsets.test.mjs pins the rules and the carve-outs
+// so a correction is a change to one rule rather than to 2,500 entries.
+// ---------------------------------------------------------------------------
+
+/**
+ * Vector floating-point instructions (§30.1.13, plus the FP reductions of
+ * §30.1.14.3 and the FP-operand permutes of §30.1.16).
+ *
+ * Two traps in the mnemonic spelling, both load-bearing:
+ *   - VFIRST.M is a *mask* instruction (find-first-set), not floating-point.
+ *   - VSEXT.VF2 / VZEXT.VF4 and friends are integer; the "VF" there is the
+ *     widening factor, not a float operand.
+ * The predicate is cross-checked in tests against the hand-curated Zvfh list,
+ * which is the same 101 mnemonics viewed at EEW=16.
+ */
+const isVectorFP = (m) => (/^VF/.test(m) && m !== 'VFIRST.M') || /^VMF/.test(m);
+
+/**
+ * Mnemonics that name EEW=64 in the opcode itself, so no legal configuration
+ * of them survives without EEW=64: the element loads/stores (VLE64.V,
+ * VLSEG8E64FF.V, the whole-register VL4RE64.V …) and the 64-bit indexed forms
+ * (VLOXEI64.V, VSUXSEG3EI64.V …). Everything else scales with SEW and stays.
+ */
+const isEew64Only = (m) => /E64/.test(m) || /EI64/.test(m);
+
+/**
+ * FP work that cannot be done without FP64, whatever the SEW.
+ *
+ * The widening FP arithmetic and the widening FP reductions produce a 2×SEW
+ * float; with FP32 as the widest type available that result is FP64, and the
+ * only alternative (2×SEW=32, i.e. FP16 sources) needs Zvfh, which is a
+ * separate extension. §30.1.18.2 says as much for the reductions outright:
+ * widening reductions from FP32 to FP64 are listed for Zve64d only.
+ * VFWCVT.F.F.V, VFNCVT.F.F.W and VFNCVT.ROD.F.F.W convert between two float
+ * widths and so need both.
+ */
+const isFp64Only = (m) =>
+  /^VFW(ADD|SUB|MUL|MACC|NMACC|MSAC|NMSAC)\./.test(m) ||
+  /^VFWRED(U|O)SUM\./.test(m) ||
+  m === 'VFWCVT.F.F.V' ||
+  m === 'VFNCVT.F.F.W' ||
+  m === 'VFNCVT.ROD.F.F.W';
+
+/**
+ * FP↔integer conversions whose integer side is 2×SEW, so they need an integer
+ * EEW of 64 even though they need no FP64: FP32→int64 widening and int64→FP32
+ * narrowing. Available under Zve64f, which has EEW=64 integers, but not under
+ * Zve32f, which stops at 32.
+ *
+ * Their mirror images stay in both — VFWCVT.F.X.V widens int16 to FP32, and
+ * VFNCVT.X.F.W narrows FP32 to int16, neither of which exceeds EEW=32.
+ */
+const needsEew64Integer = (m) =>
+  /^VFWCVT\.(RTZ\.)?XU?\.F\.V$/.test(m) || /^VFNCVT\.F\.XU?\.W$/.test(m);
+
+const vectorBase = extMap.get('V');
+assert(!!vectorBase, 'V must be populated before the Zve* subsets can be derived from it');
+
+if (vectorBase) {
+  const allVector = Object.entries(vectorBase.instructions);
+
+  // Supported EEW / FP per §30.1.18.2 Table 19, expressed as a membership test.
+  const ZVE_RULES = {
+    // EEW 8/16/32, no FP.
+    Zve32x: (m) => !isVectorFP(m) && !isEew64Only(m),
+    // EEW 8/16/32, FP32.
+    Zve32f: (m) =>
+      isVectorFP(m) ? !isFp64Only(m) && !needsEew64Integer(m) : !isEew64Only(m),
+    // EEW 8/16/32/64, no FP.
+    Zve64x: (m) => !isVectorFP(m),
+    // EEW 8/16/32/64, FP32.
+    Zve64f: (m) => (isVectorFP(m) ? !isFp64Only(m) : true),
+    // EEW 8/16/32/64, FP32 + FP64 — the same instruction set as V, which is
+    // defined as Zve64d plus a wider minimum VLEN (Zvl128b) and nothing else.
+    Zve64d: () => true,
+  };
+
+  for (const [id, belongs] of Object.entries(ZVE_RULES)) {
+    const entry = extMap.get(id);
+    assert(!!entry, `${id} must exist in the catalog to receive derived instructions`);
+    if (!entry) continue;
+    assert(
+      Object.keys(entry.instructions).length === 0,
+      `${id} now has an upstream instruction source. Remove this derivation.`,
+    );
+    for (const [mnemonic, details] of allVector) {
+      if (belongs(mnemonic)) entry.instructions[mnemonic] = JSON.parse(JSON.stringify(details));
+    }
+  }
+
+  // The subsets nest. Any rule change that breaks the chain is a bug, and the
+  // chain forks — Zve32f and Zve64x are both supersets of Zve32x but neither
+  // contains the other.
+  const setOf = (id) => new Set(Object.keys(extMap.get(id)?.instructions ?? {}));
+  for (const [sub, sup] of [
+    ['Zve32x', 'Zve32f'],
+    ['Zve32x', 'Zve64x'],
+    ['Zve32f', 'Zve64f'],
+    ['Zve64x', 'Zve64f'],
+    ['Zve64f', 'Zve64d'],
+  ]) {
+    const [a, b] = [setOf(sub), setOf(sup)];
+    const escaped = [...a].filter((m) => !b.has(m));
+    assert(escaped.length === 0, `${sub} must be a subset of ${sup}; ${escaped.join(', ')} is not`);
+  }
 }
 
 // Pass 1b: RV32 Shift Mask Injection (ISA Vol I §2.6)

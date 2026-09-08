@@ -124,6 +124,27 @@ Then `npm run sync` and `npm test && npm run build`.
   direction, and a weekly workflow files the result as one issue it keeps
   updated. Adding an extension stays a human decision: it needs a description, a
   use case, a doc link and a graph node, none of which UDB supplies.
+  Its "Still missing from UDB" watchlist is *derived* — an entry carrying a
+  `long_name` counts as already synced — so describing an extension ourselves is
+  what drops it off the list. Anything UDB has never carried therefore has to be
+  named in `ALWAYS_WATCH`, or the one part of the catalogue where we are ahead
+  of UDB is the one part the report goes quiet about. The SPMP family is there
+  now; remove an id once UDB ships it. `tests/sync-tooling.test.mjs` guards it.
+- **The Zve\* instruction sets are DERIVED, not synced.** riscv-opcodes has no
+  `rv_zve*` tag and unified-db files all 627 vector instructions under one owner
+  (`Zvl32b`), so nothing upstream says what each embedded subset contains. The
+  rules in `scripts/sync_instructions.mjs` compute them from V using the EEW and
+  FP table in unpriv §30.1.18.2. No upstream check can catch an error in this;
+  `tests/zve-subsets.test.mjs` pins the rules and the exact counts instead.
+  Change a rule, never the 2,500 generated entries.
+- **`npm run udb:check` reports two coverage numbers, and only the first
+  gates.** Global coverage asks "is this encoding in the catalogue anywhere" —
+  that is `complete`, and a failure there is unambiguous. Per-extension coverage
+  asks "does an extension upstream attributes it to actually list it", and sits
+  far lower (≈49%) because attribution differences are often legitimate: UDB
+  files AMOCAS.B under Zabha, this catalogue under Zacas. Watch it move; do not
+  gate on it. Reporting only the first is how five extensions shipped with empty
+  instruction maps while every check passed.
 - **`src/isa-params.json` is definitions, not values.** It says what a parameter
   IS: type, admissible values, and the conditions under which it exists. It
   chooses nothing. Values come from two other places: the constraints in

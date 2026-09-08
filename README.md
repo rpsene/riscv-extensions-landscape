@@ -69,6 +69,15 @@ knowing before changing anything:
 | `src/isa-dependency-graph.json` | dependencies, conflicts and parameters, with a citation on every edge | [riscv-unified-db](https://github.com/riscv/riscv-unified-db) |
 | `src/profiles.js` | the ratified profiles | the profile specifications |
 
+Two things fall outside that table, because no upstream carries them. The
+**Zve\* embedded vector subsets** are derived from V by the EEW/FP rules in
+unpriv §30.1.18.2 — riscv-opcodes has no `rv_zve*` tag and unified-db attributes
+every vector instruction to a single owner, so neither can say what belongs in
+Zve32x. And the **SPMP family** (Sspmp, Sspmpen, Smpmpdeleg) is ratified in a
+specification of its own that unified-db does not model at all; its dependency
+edges cite that document through the graph's `spec` provenance source. Both are
+places where the usual checks cannot help, so both are pinned by tests.
+
 `riscv-unified-db` is normative for dependencies. clang is the check that what we
 emit is actually usable: CI feeds every generated `-march` string to a real
 compiler. `riscv-config`, RISC-V International's own validator, disagrees with
