@@ -8,6 +8,8 @@ import {
   parseVariables,
   applyNotConstraints,
   parseEncodings,
+  parseDefinedBy,
+  predicateXlen,
   EXTENSION_ALIASES,
 } from '../scripts/check-udb-completeness.mjs';
 
@@ -260,4 +262,96 @@ encoding:
   const RM = 0x7n << 12n;
   assert.equal(encs[0].mask & RM, RM, 'RV32 pins tt via not:');
   assert.equal(encs[1].mask & RM, 0n, 'RV64 leaves it free');
+});
+
+// ── definedBy as a predicate, not a flat owner list ────────────────────────
+
+/*
+ * Reading only the `name:` values answers "which extensions" and discards
+ * "under what conditions". 132 instruction files in unified-db carry an
+ * `xlen:` inside definedBy, so MULW's "RV64 AND (M OR Zmmul)" collapsed to
+ * "[M, Zmmul]" and the RV64 half was simply gone. That condition is the only
+ * thing distinguishing an RV32-only pairing from its RV64 namesake.
+ *
+ * Every shape below is taken from a real file in the corpus.
+ */
+
+test('the simple shape: one extension, no condition', () => {
+  const { owners, predicate } = parseDefinedBy(`  extension:
+    name: I`);
+  assert.deepEqual(owners, ['I']);
+  assert.deepEqual(predicate, { extension: { name: 'I' } });
+  assert.equal(predicateXlen(predicate), null, 'applies to both XLENs');
+});
+
+test('an alternation keeps its shape', () => {
+  const { owners, predicate } = parseDefinedBy(`  extension:
+    anyOf:
+      - name: Smctr
+      - name: Ssctr`);
+  assert.deepEqual(owners, ['Smctr', 'Ssctr']);
+  assert.deepEqual(predicate, {
+    extension: { anyOf: [{ name: 'Smctr' }, { name: 'Ssctr' }] },
+  });
+});
+
+test('an xlen condition survives, nested or not', () => {
+  // Zaamo/amoor.d.rl.yaml — extension first, then the width.
+  const flat = parseDefinedBy(`  allOf:
+    - extension:
+        name: Zaamo
+    - xlen: 64`);
+  assert.deepEqual(flat.owners, ['Zaamo']);
+  assert.equal(predicateXlen(flat.predicate), 64);
+
+  // M/mulw.yaml — the width guards an alternation.
+  const nested = parseDefinedBy(`  allOf:
+    - xlen: 64
+    - extension:
+        anyOf:
+          - name: M
+          - name: Zmmul`);
+  assert.deepEqual(nested.owners, ['M', 'Zmmul']);
+  assert.equal(predicateXlen(nested.predicate), 64);
+  assert.deepEqual(nested.predicate, {
+    allOf: [{ xlen: 64 }, { extension: { anyOf: [{ name: 'M' }, { name: 'Zmmul' }] } }],
+  });
+});
+
+test('a negation is not mistaken for a requirement', () => {
+  // Zbb/zext.h.yaml: Zbb AND NOT Zbkb. The flat reading gave [Zbb, Zbkb],
+  // which states the opposite of what the file says about Zbkb.
+  const { owners, predicate } = parseDefinedBy(`  extension:
+    allOf:
+      - name: Zbb
+      - not:
+          name: Zbkb`);
+  assert.deepEqual(owners, ['Zbb', 'Zbkb'], 'the flat list still names both');
+  assert.deepEqual(predicate, {
+    extension: { allOf: [{ name: 'Zbb' }, { not: { name: 'Zbkb' } }] },
+  });
+});
+
+test('an xlen inside an alternation does not pin the instruction', () => {
+  // Only allOf propagates unconditionally: one alternative naming RV64 does
+  // not make the instruction RV64-only.
+  const { predicate } = parseDefinedBy(`  anyOf:
+    - xlen: 64
+    - extension:
+        name: Zbb`);
+  assert.equal(predicateXlen(predicate), null);
+});
+
+test('comments inside the block are ignored', () => {
+  const { owners } = parseDefinedBy(`  # zext.h is an alias of pack under Zbkb
+  extension:
+    name: Zbb`);
+  assert.deepEqual(owners, ['Zbb']);
+});
+
+test('an unrecognised shape yields no predicate rather than a wrong one', () => {
+  const { owners, predicate } = parseDefinedBy(`  extension:
+    ????`);
+  assert.equal(predicate, null, 'degrade to the flat list rather than invent a condition');
+  assert.deepEqual(owners, []);
 });

@@ -1293,6 +1293,20 @@
     "match": "0x6000",
     "mask": "0xe003"
   },
+  "c_ld_rv32": {
+    "encoding": "----------------011----------000",
+    "variable_fields": [
+      "rd_p_e",
+      "rs1_p",
+      "c_uimm8lo",
+      "c_uimm8hi"
+    ],
+    "extension": [
+      "rv32_zclsd"
+    ],
+    "match": "0x6000",
+    "mask": "0xe007"
+  },
   "c_flwsp": {
     "encoding": "----------------011-----------10",
     "variable_fields": [
@@ -1305,6 +1319,19 @@
     ],
     "match": "0x6002",
     "mask": "0xe003"
+  },
+  "c_ldsp_rv32": {
+    "encoding": "----------------011-----0-----10",
+    "variable_fields": [
+      "rd_n0_e",
+      "c_uimm9sphi",
+      "c_uimm9splo"
+    ],
+    "extension": [
+      "rv32_zclsd"
+    ],
+    "match": "0x6002",
+    "mask": "0xe083"
   },
   "c_fsd": {
     "encoding": "----------------101-----------00",
@@ -1346,6 +1373,20 @@
     "match": "0xe000",
     "mask": "0xe003"
   },
+  "c_sd_rv32": {
+    "encoding": "----------------111----------000",
+    "variable_fields": [
+      "rs1_p",
+      "rs2_p_e",
+      "c_uimm8hi",
+      "c_uimm8lo"
+    ],
+    "extension": [
+      "rv32_zclsd"
+    ],
+    "match": "0xe000",
+    "mask": "0xe007"
+  },
   "c_fswsp": {
     "encoding": "----------------111-----------10",
     "variable_fields": [
@@ -1357,6 +1398,18 @@
     ],
     "match": "0xe002",
     "mask": "0xe003"
+  },
+  "c_sdsp_rv32": {
+    "encoding": "----------------111----------010",
+    "variable_fields": [
+      "c_rs2_e",
+      "c_uimm9sp_s"
+    ],
+    "extension": [
+      "rv32_zclsd"
+    ],
+    "match": "0xe002",
+    "mask": "0xe007"
   },
   "c_j": {
     "encoding": "----------------101-----------01",
@@ -4809,6 +4862,19 @@
     "match": "0x3003",
     "mask": "0x707f"
   },
+  "ld_rv32": {
+    "encoding": "-----------------011----00000011",
+    "variable_fields": [
+      "rd_e",
+      "rs1",
+      "imm12"
+    ],
+    "extension": [
+      "rv32_zilsd"
+    ],
+    "match": "0x3003",
+    "mask": "0x70ff"
+  },
   "ld_aq": {
     "encoding": "001101-00000-----011-----0101111",
     "variable_fields": [
@@ -5399,6 +5465,20 @@
     ],
     "match": "0x3023",
     "mask": "0x707f"
+  },
+  "sd_rv32": {
+    "encoding": "-----------0-----011-----0100011",
+    "variable_fields": [
+      "imm12hi",
+      "rs1",
+      "rs2_e",
+      "imm12lo"
+    ],
+    "extension": [
+      "rv32_zilsd"
+    ],
+    "match": "0x3023",
+    "mask": "0x10707f"
   },
   "sd_rl": {
     "encoding": "00111-1----------011000000101111",

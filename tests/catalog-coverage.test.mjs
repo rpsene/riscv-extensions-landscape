@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PROFILES } from '../src/profiles.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const catalog = JSON.parse(
@@ -449,11 +450,16 @@ test('optional and mandatory sets do not overlap', () => {
   const optional = JSON.parse(
     fs.readFileSync(path.join(here, '..', 'src', 'profile-optional.json'), 'utf8'),
   );
-  const profiles = fs.readFileSync(path.join(here, '..', 'src', 'profiles.js'), 'utf8');
+  /*
+   * Read the table, do not re-parse the source. The regex this replaces
+   * assumed every profile was written as a multi-line array: a one-line entry
+   * (`RVI20U32: ['RV32I'],`) has no `\n  ]` to stop at, so the match ran on
+   * into the NEXT profile's block and the test silently compared RVI20U32's
+   * options against RVA20's mandatory set.
+   */
   for (const [profile, list] of Object.entries(optional)) {
-    const block = profiles.match(new RegExp(`\\n  ${profile}: \\[([\\s\\S]*?)\\n  \\]`));
-    if (!block) continue;
-    const mandatory = new Set([...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+    const mandatory = new Set(PROFILES[profile] ?? []);
+    if (mandatory.size === 0) continue;
     const both = list.filter((id) => mandatory.has(id));
     assert.deepEqual(
       both,

@@ -192,11 +192,13 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
   const attributedDifferently = [];
   const coveredByBroaderRow = [];
   const encodingMismatches = [];
+  let considered = 0;
 
   for (const inst of upstream.instructions || []) {
     const mnemonic = inst.mnemonic.toUpperCase();
     if (allowMissingInstructions.includes(mnemonic)) continue;
     if (!upstreamIsRatified(inst)) continue;
+    considered++;
 
     /*
      * Only rows in an extension upstream attributes the instruction to are
@@ -304,6 +306,50 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
     .filter((r) => !encodingIsWellFormed(r))
     .map((r) => ({ mnemonic: r.mnemonic, extension: r.extension }));
 
+  /*
+   * TWO COVERAGE QUESTIONS, NOT ONE
+   *
+   * "Do we carry this encoding anywhere?" and "does the extension upstream
+   * attributes it to list it?" are different questions with different answers,
+   * and reporting only the first is how five real gaps passed this gate.
+   *
+   * Zve32x is the clearest: every one of its instructions is present in the
+   * catalogue, under V, so global coverage is perfect while the Zve32x entry
+   * itself listed nothing. Zvkb and Zilsd were the same shape. Each showed up
+   * here only as another attributedDifferently row among hundreds, and the
+   * `complete` flag never looked at that bucket.
+   *
+   * So both numbers are reported. Global coverage is the build gate, because a
+   * missing encoding is unambiguously a gap. Per-extension coverage is NOT a
+   * gate: attribution differences are frequently legitimate — unified-db puts
+   * AMOCAS.B under Zabha and this catalogue under Zacas, and both readings are
+   * defensible — so it is a number to watch move, not a threshold to pass.
+   */
+  const coveredInAttributedExtension =
+    considered -
+    encodingMismatches.length -
+    attributedDifferently.length -
+    missingInstructions.length;
+  const pct = (n) => (considered === 0 ? 100 : Math.round((n / considered) * 1000) / 10);
+
+  const coverage = {
+    considered,
+    // "Is the encoding in the catalogue at all?"
+    global: {
+      covered: considered - missingInstructions.length,
+      uncovered: missingInstructions.length,
+      percent: pct(considered - missingInstructions.length),
+    },
+    // "Does an extension upstream attributes it to actually list it?"
+    perExtension: {
+      covered: coveredInAttributedExtension,
+      filedElsewhere: attributedDifferently.length,
+      encodingDisagrees: encodingMismatches.length,
+      uncovered: missingInstructions.length,
+      percent: pct(coveredInAttributedExtension),
+    },
+  };
+
   return {
     missingExtensions,
     missingInstructions: missingInstructions.sort((a, b) => a.mnemonic.localeCompare(b.mnemonic)),
@@ -314,6 +360,14 @@ export function compareAgainstUpstream(catalogue, upstream, options = {}) {
     encodingMismatches,
     surplusInstructions,
     malformed,
+    coverage,
+    /*
+     * What `complete` does and does not assert, stated rather than implied.
+     * It is global coverage only. Encoding disagreements and malformed rows are
+     * reported beside it and deliberately excluded: REV8 legitimately carries
+     * two XLEN encodings under one upstream name, so gating on
+     * encodingMismatches would fail every run for a reason nobody can fix.
+     */
     complete: missingExtensions.length === 0 && missingInstructions.length === 0,
   };
 }

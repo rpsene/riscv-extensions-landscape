@@ -160,6 +160,55 @@ test('ownership decides the bucket: right encoding, wrong extension is an attrib
   assert.equal(result.attributedDifferently[0].localExtension, 'Zalasr');
 });
 
+test('the two coverage questions are answered separately', () => {
+  /*
+   * The bug this guards: "is the encoding in the catalogue anywhere" reads
+   * 100% while an extension lists nothing at all. That is not hypothetical —
+   * it is exactly how Zve32x, Zve32f, Zve64x, Zve64f and Zvkb shipped empty
+   * past every check, their instructions all present under V and Zvbb.
+   *
+   * One instruction, attributed by upstream to an extension that does not list
+   * it locally, must count as covered globally and uncovered per-extension.
+   */
+  const zalasr = rowFor('Zalasr', 'LB.AQ');
+  const result = compareAgainstUpstream(catalogue, {
+    extensions: [],
+    instructions: [
+      { mnemonic: 'LB.AQ', match: zalasr.match, mask: zalasr.mask, definedBy: ['Zicsr'] },
+    ],
+  });
+
+  assert.equal(result.coverage.considered, 1);
+  assert.deepEqual(result.coverage.global, { covered: 1, uncovered: 0, percent: 100 });
+  assert.equal(result.coverage.perExtension.covered, 0);
+  assert.equal(result.coverage.perExtension.filedElsewhere, 1);
+  assert.equal(result.coverage.perExtension.percent, 0);
+
+  // `complete` is global coverage, and now says so rather than implying it.
+  assert.equal(result.complete, true, 'nothing is absent, so the gate passes');
+});
+
+test('coverage buckets account for every instruction considered', () => {
+  // considered = covered here + filed elsewhere + encoding disagrees + absent.
+  // If they ever stop adding up, a bucket is being double-counted.
+  const zalasr = rowFor('Zalasr', 'LB.AQ');
+  const result = compareAgainstUpstream(catalogue, {
+    extensions: [],
+    instructions: [
+      { mnemonic: 'LB.AQ', match: zalasr.match, mask: zalasr.mask, definedBy: ['Zalasr'] },
+      { mnemonic: 'LB.AQ', match: zalasr.match, mask: zalasr.mask, definedBy: ['Zicsr'] },
+      { mnemonic: 'NOSUCH.INSN', match: '0xdeadbeef', mask: '0xffffffff', definedBy: ['Zicsr'] },
+    ],
+  });
+  const { considered, perExtension: pe } = result.coverage;
+  assert.equal(considered, 3);
+  assert.equal(pe.covered + pe.filedElsewhere + pe.encodingDisagrees + pe.uncovered, considered);
+  assert.equal(pe.covered, 1);
+  assert.equal(pe.filedElsewhere, 1);
+  assert.equal(pe.uncovered, 1);
+  assert.equal(result.complete, false, 'a genuinely absent encoding still fails the gate');
+});
+
 // ── the ordering variants, against real data ───────────────────────────────
 
 test('all four orderings of a real AMO are covered by the one catalogue row', () => {

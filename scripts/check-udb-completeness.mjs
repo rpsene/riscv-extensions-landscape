@@ -201,23 +201,105 @@ export function parseEncodings(text) {
   return out;
 }
 
-export function parseUpstream(specDir) {
-  const readDefinedBy = (text) => {
-    /*
-     * definedBy is a nested block, in one of two shapes:
-     *
-     *   definedBy:            definedBy:
-     *     extension:            extension:
-     *       name: I               anyOf:
-     *                               - name: Zbb
-     *                               - name: Zbkb
-     *
-     * Capture every indented line under it, up to the next key at column zero,
-     * then take each `name:`.
-     */
-    const block = blockUnder(text, 'definedBy');
-    return block ? [...block.matchAll(/name:\s*([A-Za-z0-9_.]+)/g)].map((x) => x[1]) : [];
+/**
+ * definedBy, as the predicate tree it actually is.
+ *
+ * Scraping `name:` out of the block gives the owner list and throws away the
+ * shape around it, which is not a detail: 132 instruction files carry an
+ * `xlen:` inside definedBy, so MULW's "RV64 AND (M OR Zmmul)" flattens to
+ * "[M, Zmmul]" and the RV64 half is gone. That is the same information a
+ * reader needs to tell an RV32-only pairing (Zilsd's LD) from the RV64 one
+ * (I's LD) — the two share a mnemonic and differ only in the condition.
+ *
+ * The grammar unified-db uses here is small and closed. Every shape in the
+ * corpus is one of:
+ *
+ *   extension: <node>        allOf: [<node>…]        name: <id>
+ *   not: <node>              anyOf: [<node>…]        xlen: 32 | 64
+ *                            oneOf: [<node>…]
+ *
+ * so this parses that subset by indentation rather than pulling in a YAML
+ * dependency. Anything it does not recognise yields a null predicate, and the
+ * caller falls back to the flat owner list — degrading to today's behaviour
+ * rather than inventing a condition.
+ */
+export function parseDefinedBy(block) {
+  if (!block) return { owners: [], predicate: null };
+
+  const lines = block
+    .split('\n')
+    .filter((l) => l.trim() !== '' && !/^\s*#/.test(l))
+    .map((l) => ({ indent: l.match(/^\s*/)[0].length, text: l.trim() }));
+
+  let failed = false;
+
+  // Parses the run of lines at `indent` starting at `i`; returns [value, next].
+  const parseBlock = (i, indent) => {
+    if (i >= lines.length) return [null, i];
+
+    if (lines[i].text.startsWith('- ')) {
+      const items = [];
+      while (i < lines.length && lines[i].indent === indent && lines[i].text.startsWith('- ')) {
+        // A sequence item is itself a mapping: `- name: Zbb`, or `- extension:`
+        // with its own indented body on the lines that follow.
+        const [value, next] = parseMapping(lines[i].text.slice(2), i, indent + 2);
+        items.push(value);
+        i = next;
+      }
+      return [items, i];
+    }
+
+    const out = {};
+    while (i < lines.length && lines[i].indent === indent) {
+      const [value, next] = parseMapping(lines[i].text, i, indent);
+      Object.assign(out, value);
+      i = next;
+    }
+    return [out, i];
   };
+
+  // `text` is one `key:` or `key: value`; `i` is its line, `indent` its column.
+  const parseMapping = (text, i, indent) => {
+    const m = text.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
+    if (!m) {
+      failed = true;
+      return [{}, i + 1];
+    }
+    const [, key, scalar] = m;
+    if (scalar !== '') return [{ [key]: /^\d+$/.test(scalar) ? Number(scalar) : scalar }, i + 1];
+    // Nested: the body is whatever follows at a deeper indent.
+    const bodyIndent = lines[i + 1]?.indent;
+    if (bodyIndent == null || bodyIndent <= indent) {
+      failed = true;
+      return [{ [key]: null }, i + 1];
+    }
+    const [value, next] = parseBlock(i + 1, bodyIndent);
+    return [{ [key]: value }, next];
+  };
+
+  const [tree] = parseBlock(0, lines[0]?.indent ?? 0);
+  const owners = [...block.matchAll(/name:\s*([A-Za-z0-9_.]+)/g)].map((x) => x[1]);
+  return { owners, predicate: failed ? null : tree };
+}
+
+/** The XLEN a predicate pins, or null where it applies to both. */
+export function predicateXlen(predicate) {
+  if (!predicate || typeof predicate !== 'object') return null;
+  if (Array.isArray(predicate)) {
+    for (const item of predicate) {
+      const found = predicateXlen(item);
+      if (found != null) return found;
+    }
+    return null;
+  }
+  if (typeof predicate.xlen === 'number') return predicate.xlen;
+  // Only allOf propagates a condition unconditionally: an xlen inside anyOf is
+  // one alternative among several, not a requirement.
+  return predicateXlen(predicate.allOf ?? null);
+}
+
+export function parseUpstream(specDir) {
+  const readDefinedBy = (text) => parseDefinedBy(blockUnder(text, 'definedBy'));
 
   const extDir = path.join(specDir, 'ext');
   const extensions = [];
@@ -242,19 +324,28 @@ export function parseUpstream(specDir) {
       const text = fs.readFileSync(path.join(sub, file), 'utf8');
       const name = text.match(/^name:\s*(.+?)\s*$/m);
       const mnemonic = (name ? name[1] : file.replace(/\.yaml$/, '')).toUpperCase();
-      const owners = readDefinedBy(text);
+      const { owners, predicate } = readDefinedBy(text);
 
       // One entry per declared encoding: two where the file is XLEN-keyed.
       for (const enc of parseEncodings(text)) {
         instructions.push({
           mnemonic,
+          // An encoding may be XLEN-keyed (`encoding: RV32: …`), and ownership
+          // may be XLEN-conditioned (`definedBy: allOf: [ …, xlen: 64 ]`).
+          // They are different statements and either can be present alone, so
+          // both are carried rather than merged into one field.
           xlen: enc.xlen,
+          ownerXlen: predicateXlen(predicate),
           match: enc.match,
           mask: enc.mask,
           narrowedFields: enc.narrowed,
           // Fall back to the directory only when the file names no owner. An
           // empty array is truthy, so `|| [dir]` silently kept the empty list.
           definedBy: owners.length ? owners : [dir],
+          // The unflattened predicate, kept so a report can say WHY an
+          // instruction belongs where it does. null where the shape was not
+          // recognised, in which case only `definedBy` is trustworthy.
+          definedByPredicate: predicate,
         });
       }
     }
@@ -381,7 +472,33 @@ function main(argv) {
     console.log(list(result.malformed, (x) => `${x.extension} ${x.mnemonic}`));
   }
 
-  console.log(`\ncomplete: ${result.complete}`);
+  /*
+   * Two numbers, because they answer two questions and only the first one used
+   * to be reported. "Is the encoding in the catalogue anywhere" was passing at
+   * 100% while five extensions listed nothing at all — Zve32x, Zve32f, Zve64x,
+   * Zve64f and Zvkb each had every instruction present under V or Zvbb, and
+   * showed up here only as more attribution rows, which the gate never read.
+   */
+  const { coverage: cov } = result;
+  console.log(`\ncoverage over ${cov.considered} upstream encodings:`);
+  console.log(
+    `    global (present anywhere in the catalogue)   ` +
+      `${cov.global.covered}/${cov.considered}  ${cov.global.percent}%`,
+  );
+  console.log(
+    `    per-extension (listed by an owner upstream names)  ` +
+      `${cov.perExtension.covered}/${cov.considered}  ${cov.perExtension.percent}%`,
+  );
+  console.log(
+    `      filed elsewhere ${cov.perExtension.filedElsewhere}` +
+      `   encoding disagrees ${cov.perExtension.encodingDisagrees}` +
+      `   absent ${cov.perExtension.uncovered}`,
+  );
+
+  // Only global coverage gates. Attribution differences are often legitimate
+  // (unified-db files AMOCAS.B under Zabha, this catalogue under Zacas), so
+  // per-extension coverage is a number to watch, not a threshold to pass.
+  console.log(`\ncomplete: ${result.complete}   (global coverage; see the two numbers above)`);
   return result.complete ? 0 : 1;
 }
 

@@ -15,6 +15,9 @@
     "clang": {
       "repo": "llvm/llvm-project",
       "note": "RISCVISAInfo implication, cited per edge; weaker backing than udb or isa-manual"
+    },
+    "spec": {
+      "note": "standalone ratified specification; document and section cited per edge"
     }
   },
   "nodes": {
@@ -392,6 +395,20 @@
       "requires": [],
       "verified": "udb"
     },
+    "Smpmpdeleg": {
+      "requires": [
+        {
+          "ext": "Smcsrind",
+          "src": "spec",
+          "ref": "SPMP v1.0 §4 — \"The Smcsrind extension for indirect CSR access must be implemented.\""
+        },
+        {
+          "ext": "Sspmp",
+          "src": "spec",
+          "ref": "SPMP v1.0 §4.1 — delegates PMP entries to S-mode, \"thereby creating SPMP entries\""
+        }
+      ]
+    },
     "Smpmpmt": {
       "requires": [],
       "verified": "udb"
@@ -516,6 +533,24 @@
           "ext": "Smnpm",
           "src": "udb",
           "ref": "Sspm.yaml requirements.extension"
+        }
+      ]
+    },
+    "Sspmp": {
+      "requires": [
+        {
+          "ext": "Sscsrind",
+          "src": "spec",
+          "ref": "SPMP v1.0 §2.1 — \"The Sscsrind extension for indirect CSR access must be implemented.\""
+        }
+      ]
+    },
+    "Sspmpen": {
+      "requires": [
+        {
+          "ext": "Sspmp",
+          "src": "spec",
+          "ref": "SPMP v1.0 §3 — an SPMP entry is active only when spmpen[i] is set and spmpcfg[i].A is non-zero"
         }
       ]
     },
