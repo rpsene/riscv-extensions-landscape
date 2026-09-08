@@ -78,6 +78,50 @@ import { PROFILES } from './profiles.js';
 import PROFILE_OPTIONAL from './profile-optional.json';
 import { buildIsaConfigYaml } from './exportUtils.js';
 import AskAiLauncher from './AskAiLauncher.jsx';
+import SandboxPanel from './SandboxPanel.jsx';
+import {
+  OPCODES,
+  loadSandbox,
+  deserializeSandbox,
+  deserializeSandboxAsync,
+} from './sandboxModel.js';
+import {
+  BIT_MASK_32,
+  parseHexToBigInt,
+  toHex32,
+  normalizeEncodingString,
+  encodingToMatchMask,
+  matchMaskToEncoding,
+  patternsOverlap,
+  isSubsetPattern,
+  overlapExampleWord,
+} from './encodingUtils.js';
+
+export const formatSandboxExtensionForCatalog = (ext) => {
+  const instructionsObj = {};
+  for (const instr of ext.instructions || []) {
+    if (!instr.mnemonic) continue;
+    instructionsObj[instr.mnemonic] = {
+      encoding: instr.encoding,
+      variable_fields: instr.variable_fields || [],
+      match: instr.match,
+      mask: instr.mask,
+      extension: [`rv_${ext.id.toLowerCase()}`],
+      notes: instr.notes,
+    };
+  }
+  const customSlotName = OPCODES.find((o) => o.value === ext.opcode)?.name || 'custom';
+  return {
+    id: ext.id,
+    name: ext.name || ext.id,
+    desc: ext.desc || 'Custom user-defined extension (Sandbox)',
+    use: `Custom ${customSlotName} opcode extension`,
+    opcode: ext.opcode,
+    isSandbox: true,
+    url: '',
+    instructions: instructionsObj,
+  };
+};
 
 // Ids the catalog can actually render. The dependency graph carries a few nodes
 // the catalog does not (UDB's S requires Sm, for which we have no entry), and
@@ -88,9 +132,6 @@ const CATALOG_IDS = new Set(
     .filter(Boolean)
     .map((e) => e.id),
 );
-
-const BIT_WIDTH = 32n;
-const BIT_MASK_32 = (1n << BIT_WIDTH) - 1n;
 
 /* ─── Permalinks ────────────────────────────────────────────────────────────
  * A link to a specific extension, so the tool can be cited in a discussion or
@@ -235,18 +276,40 @@ const allExtensionsFlat = Object.values(extensions).flat().filter(Boolean);
 // tile memo: tiles receive a boolean, so a fresh Set would compare the same.
 const EMPTY_MATCH_SET = new Set();
 
-const findExtensionById = (id) => {
+const findExtensionById = (id, extraExtensions = []) => {
   const wanted = String(id ?? '')
     .trim()
     .toLowerCase();
   if (!wanted) return null;
   // Case-insensitive: people type ?ext=zba as readily as ?ext=Zba.
-  return allExtensionsFlat.find((ext) => ext.id.toLowerCase() === wanted) ?? null;
+  const pool = extraExtensions.length
+    ? [...allExtensionsFlat, ...extraExtensions]
+    : allExtensionsFlat;
+  return pool.find((ext) => ext.id.toLowerCase() === wanted) ?? null;
 };
 
 const extensionFromUrl = () => {
   if (typeof window === 'undefined') return null;
-  return findExtensionById(new URLSearchParams(window.location.search).get(PERMALINK_PARAM));
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const sandboxParam = params.get('sandbox');
+    let sandboxExts = [];
+    // c: prefixes need async decompression \u2014 can't resolve synchronously.
+    // Fall back to localStorage so the ?ext= permalink still works on share links;
+    // the async useEffect below will load and select the correct sandbox extension
+    // once decompression finishes.
+    if (sandboxParam && !sandboxParam.startsWith('c:')) {
+      sandboxExts = deserializeSandbox(sandboxParam);
+    } else {
+      sandboxExts = loadSandbox();
+    }
+    return findExtensionById(
+      params.get(PERMALINK_PARAM),
+      sandboxExts.map(formatSandboxExtensionForCatalog),
+    );
+  } catch {
+    return null;
+  }
 };
 
 const permalinkFor = (extId) => {
@@ -519,97 +582,10 @@ const COMPRESSED_BY_STANDARD = COMPRESSED_INSTRUCTION_MAPPINGS.reduce((acc, entr
 
 const STANDARD_EQUIVALENT_PRIORITY = ['RV32I', 'RV64I', 'RV128I', 'RV32E', 'RV64E'];
 
-const normalizeHexString = (value) => {
-  const text = String(value ?? '').trim();
-  if (!text) return '';
-  return text.toLowerCase().startsWith('0x') ? text.toLowerCase() : `0x${text.toLowerCase()}`;
-};
-
-const parseHexToBigInt = (value) => {
-  const normalized = normalizeHexString(value);
-  if (!normalized) return null;
-  if (!/^0x[0-9a-f]+$/i.test(normalized)) return null;
-  try {
-    return BigInt(normalized);
-  } catch {
-    return null;
-  }
-};
-
-const toHex32 = (value) => {
-  const v = (value ?? 0n) & BIT_MASK_32;
-  return `0x${v.toString(16).padStart(8, '0')}`;
-};
-
-const normalizeEncodingString = (value) => {
-  const encoding = String(value ?? '').replace(/\s+/g, '');
-  if (!encoding) return '';
-  return encoding;
-};
-
-const encodingToMatchMask = (encoding) => {
-  const normalized = normalizeEncodingString(encoding);
-  if (!normalized) return { match: null, mask: null, error: 'Provide an encoding or match/mask.' };
-  if (normalized.length !== 32) {
-    return {
-      match: null,
-      mask: null,
-      error: `Encoding must be 32 characters (got ${normalized.length}).`,
-    };
-  }
-  if (!/^[01-]{32}$/.test(normalized)) {
-    return { match: null, mask: null, error: 'Encoding may only contain 0, 1, and -.' };
-  }
-
-  let match = 0n;
-  let mask = 0n;
-  for (let i = 0; i < 32; i++) {
-    const bit = 31n - BigInt(i);
-    const ch = normalized[i];
-    if (ch === '-') continue;
-    mask |= 1n << bit;
-    if (ch === '1') match |= 1n << bit;
-  }
-  return { match, mask, error: null };
-};
-
-const matchMaskToEncoding = (match, mask) => {
-  const m = (match ?? 0n) & BIT_MASK_32;
-  const k = (mask ?? 0n) & BIT_MASK_32;
-  let out = '';
-  for (let bit = 31n; bit >= 0n; bit--) {
-    const bitMask = 1n << bit;
-    if ((k & bitMask) === 0n) out += '-';
-    else out += (m & bitMask) === 0n ? '0' : '1';
-  }
-  return out;
-};
-
-const patternsOverlap = (aMatch, aMask, bMatch, bMask) => {
-  const commonMask = aMask & bMask & BIT_MASK_32;
-  const diff = (aMatch ^ bMatch) & commonMask & BIT_MASK_32;
-  return diff === 0n;
-};
-
-const isSubsetPattern = (subsetMatch, subsetMask, supMatch, supMask) => {
-  const subsetMaskNorm = (subsetMask ?? 0n) & BIT_MASK_32;
-  const supMaskNorm = (supMask ?? 0n) & BIT_MASK_32;
-  const subsetMatchNorm = (subsetMatch ?? 0n) & BIT_MASK_32;
-  const supMatchNorm = (supMatch ?? 0n) & BIT_MASK_32;
-
-  const supBitsNotConstrainedBySubset = supMaskNorm & ~subsetMaskNorm;
-  if (supBitsNotConstrainedBySubset !== 0n) return false;
-  const mismatch = (subsetMatchNorm ^ supMatchNorm) & supMaskNorm;
-  return mismatch === 0n;
-};
-
-const overlapExampleWord = (aMatch, aMask, bMatch, bMask) => {
-  const am = (aMatch ?? 0n) & BIT_MASK_32;
-  const ak = (aMask ?? 0n) & BIT_MASK_32;
-  const bm = (bMatch ?? 0n) & BIT_MASK_32;
-  const bk = (bMask ?? 0n) & BIT_MASK_32;
-  return ((am & ak) | (bm & (bk & ~ak))) & BIT_MASK_32;
-};
+// Encoding utilities imported from ./encodingUtils.js (see top-of-file imports).
+// The functions below were originally defined here; they now live in a shared
+// module so both the Encoder Validator and the Custom Extension Sandbox can
+// use the same validated arithmetic without duplication.
 
 const extensionCsrLabels = {
   S: 'Supervisor CSRs',
@@ -644,6 +620,55 @@ const RISCVExplorer = () => {
   const evolutionTriggerRef = React.useRef(null);
   const aboutTriggerRef = React.useRef(null);
   const [encodingMapOpen, setEncodingMapOpen] = useState(false);
+  const [sandboxOpen, setSandboxOpen] = useState(false);
+
+  const [sandboxExtensions, setSandboxExtensions] = useState(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const param = new URLSearchParams(window.location.search).get('sandbox');
+      if (param && !param.startsWith('c:')) {
+        const fromUrl = deserializeSandbox(param);
+        if (Array.isArray(fromUrl) && fromUrl.length > 0) return fromUrl;
+      }
+    } catch {
+      /* ignore */
+    }
+    return loadSandbox();
+  });
+
+  React.useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const params = new URLSearchParams(window.location.search);
+      const param = params.get('sandbox');
+      if (param && param.startsWith('c:')) {
+        deserializeSandboxAsync(param).then((fromUrl) => {
+          if (Array.isArray(fromUrl) && fromUrl.length > 0) {
+            setSandboxExtensions(fromUrl);
+            setSandboxOpen(true);
+            // Resolve the ?ext= permalink against the newly-loaded sandbox extensions.
+            // extensionFromUrl ran synchronously before decompression, so a share link
+            // like ?ext=Xtest__sandbox&sandbox=c:... never selected the right extension.
+            const extParam = params.get(PERMALINK_PARAM);
+            if (extParam) {
+              const formatted = fromUrl.map(formatSandboxExtensionForCatalog);
+              const match = findExtensionById(extParam, formatted);
+              if (match) setSelectedExt(match);
+            }
+          }
+        });
+      } else if (param) {
+        setSandboxOpen(true);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const formattedSandboxExts = React.useMemo(
+    () => sandboxExtensions.map(formatSandboxExtensionForCatalog),
+    [sandboxExtensions],
+  );
   const [encoderValidatorInput, setEncoderValidatorInput] = useState({
     mnemonic: '',
     encoding: '',
@@ -1042,6 +1067,10 @@ const RISCVExplorer = () => {
         const arrToAdd = Array.isArray(idsToAdd) ? idsToAdd : [idsToAdd];
 
         for (const id of arrToAdd) {
+          if (!id || id.includes('__') || id.endsWith('__sandbox')) {
+            continue;
+          }
+
           if (isToggle && next.has(id)) {
             // If locked, we cannot toggle it off
             if (currentLocked.has(id)) {
@@ -1110,8 +1139,11 @@ const RISCVExplorer = () => {
     [showToast, seedProfile, baselineLocked],
   );
 
-  // Flat list of all extensions — stable reference for workspace utilities
-  const allExtsList = React.useMemo(() => Object.values(extensions).flat().filter(Boolean), []);
+  // Flat list of all extensions including custom sandbox extensions — stable reference
+  const allExtsList = React.useMemo(
+    () => [...allExtensionsFlat, ...formattedSandboxExts],
+    [formattedSandboxExts],
+  );
 
   const workspaceTotalInstr = React.useMemo(() => {
     if (workspaceIds.size === 0) return 0;
@@ -1651,7 +1683,7 @@ const RISCVExplorer = () => {
 
   const extensionSearchIndexById = React.useMemo(() => {
     const index = new Map();
-    const allExts = Object.values(extensions).flat().filter(Boolean);
+    const allExts = allExtsList;
 
     for (const ext of allExts) {
       const parts = [];
@@ -1708,7 +1740,7 @@ const RISCVExplorer = () => {
     }
 
     return index;
-  }, []);
+  }, [allExtsList]);
 
   // Stable identities on purpose: these ride in tileProps, and a fresh function
   // each render would make every tile re-render even when nothing it shows moved.
@@ -2003,20 +2035,20 @@ const RISCVExplorer = () => {
     }
     if (compareKind === 'ext') {
       return buildExtensionComparison(
-        compareKeys.map((id) => findExtensionById(id)).filter(Boolean),
+        compareKeys.map((id) => findExtensionById(id, formattedSandboxExts)).filter(Boolean),
       );
     }
     return buildInstructionComparison(
       compareKeys
         .map((key) => {
           const parsed = parseInstructionKey(key);
-          const ext = parsed && findExtensionById(parsed.extId);
+          const ext = parsed && findExtensionById(parsed.extId, formattedSandboxExts);
           const instr = ext && ext.instructions?.[parsed.mnemonic];
           return instr ? { extId: ext.id, mnemonic: parsed.mnemonic, instr } : null;
         })
         .filter(Boolean),
     );
-  }, [compareKind, compareKeys, compareExpandDeps]);
+  }, [compareKind, compareKeys, compareExpandDeps, formattedSandboxExts]);
 
   // Mirrors the existing `ext` permalink effect: replaceState, never push, so
   // pinning does not fill the back button with intermediate states.
@@ -2317,13 +2349,12 @@ const RISCVExplorer = () => {
                   all. Stretch until there is room to right-align.
                   min-w-0 because a flex item defaults to min-width:auto and
                   refuses to shrink below its content. */}
-              <div className="riscv-toolbar flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+              <div className="riscv-toolbar flex flex-wrap items-center justify-between gap-2 w-full pb-1">
                 {/* Filters — what you are looking at. */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
-                  {/* Grouped Filters Container. Wraps on narrow screens; without
-                      it this row stays one 557px line that cannot shrink. */}
+                <div className="flex items-center gap-x-1 flex-1 pr-1 shrink-0">
+                  {/* Grouped Filters Container. */}
                   <div
-                    className="flex flex-wrap items-center gap-x-3 gap-y-2"
+                    className="flex items-center gap-x-1"
                     style={{
                       background: 'var(--riscv-plate)',
                       borderColor: 'rgba(255,255,255,0.08)',
@@ -2336,107 +2367,92 @@ const RISCVExplorer = () => {
                       catalogue and write nothing, while the builder's "Start from
                       profile" replaces the workspace. Both said "profile" and looked
                       alike, so the pair read as duplication (#212). */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className="text-[11px] uppercase tracking-widest font-semibold"
-                        style={{ color: 'var(--riscv-text-3)' }}
-                      >
-                        Highlight
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {Object.keys(profiles).map((profile) => (
-                          <span key={profile} className="inline-flex items-center">
-                            <button
-                              onClick={() =>
-                                setActiveProfile((current) => {
-                                  // Profile and volume are mutually exclusive. With
-                                  // both live, highlight matched either one while
-                                  // dimming followed only the volume, so the grid
-                                  // gave no clue which filter was acting.
-                                  setActiveVolume(null);
-                                  setSelectedInstruction(null);
-                                  setSearchMatches(null);
-                                  return current === profile ? null : profile;
-                                })
-                              }
-                              aria-pressed={activeProfile === profile}
-                              title={
-                                activeProfile === profile
-                                  ? `Stop highlighting ${profile}`
-                                  : `Highlight the extensions in ${profile} — does not change your ISA configuration`
-                              }
-                              className={[
-                                'px-3 py-1.5 text-[12px] rounded-lg transition-all duration-200 font-medium',
-                                activeProfile === profile
-                                  ? 'bg-slate-700/80 text-white shadow-inner border border-slate-500/50'
-                                  : 'text-slate-300 hover:text-white hover:bg-slate-700/40 border border-transparent hover:border-slate-600/30',
-                              ].join(' ')}
-                            >
-                              {profile}
-                            </button>
-                            {/* Sibling, not nested: a button inside a button is
-                              invalid HTML and React warns about it. */}
-                            {compareMode && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleCompareProfile(profile);
-                                }}
-                                aria-pressed={compareProfileNames.has(profile)}
-                                className="riscv-pin-btn ml-0.5 px-1 py-0.5 rounded border text-[11px] inline-flex items-center justify-center transition-all"
-                                title={
-                                  compareProfileNames.has(profile)
-                                    ? `Remove ${profile} from comparison`
-                                    : `Pin ${profile} to comparison`
-                                }
-                              >
-                                <GitCompare
-                                  size={9}
-                                  strokeWidth={compareProfileNames.has(profile) ? 2.5 : 2}
-                                />
-                              </button>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Vertical Divider */}
-                    <div className="h-5 w-px bg-slate-700/60 mx-1" />
-
-                    {/* Volumes */}
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-[11px] uppercase tracking-widest font-semibold"
-                        style={{ color: 'var(--riscv-text-3)' }}
-                      >
-                        Volume
-                      </span>
-                      <div className="flex gap-1.5">
-                        {['I', 'II'].map((vol) => (
+                    {/* Profiles Segmented Control */}
+                    <div className="flex items-center gap-1 bg-slate-500/10 p-1 rounded-xl border border-slate-500/20">
+                      {Object.keys(profiles).map((profile) => (
+                        <span key={profile} className="inline-flex items-center">
                           <button
-                            key={vol}
                             onClick={() =>
-                              setActiveVolume((current) => {
-                                setActiveProfile(null);
+                              setActiveProfile((current) => {
+                                // Profile and volume are mutually exclusive. With
+                                // both live, highlight matched either one while
+                                // dimming followed only the volume, so the grid
+                                // gave no clue which filter was acting.
+                                setActiveVolume(null);
                                 setSelectedInstruction(null);
                                 setSearchMatches(null);
-                                return current === vol ? null : vol;
+                                return current === profile ? null : profile;
                               })
                             }
-                            aria-pressed={activeVolume === vol}
+                            aria-pressed={activeProfile === profile}
+                            title={
+                              activeProfile === profile
+                                ? `Stop highlighting ${profile}`
+                                : `Highlight the extensions in ${profile} — does not change your ISA configuration`
+                            }
                             className={[
-                              'px-3 py-1.5 text-[12px] rounded-lg transition-all duration-200 font-medium',
-                              activeVolume === vol
+                              'px-3 py-1.5 text-[12px] rounded-lg transition-all duration-200 font-medium whitespace-nowrap shrink-0',
+                              activeProfile === profile
                                 ? 'bg-slate-700/80 text-white shadow-inner border border-slate-500/50'
                                 : 'text-slate-300 hover:text-white hover:bg-slate-700/40 border border-transparent hover:border-slate-600/30',
                             ].join(' ')}
                           >
-                            Vol {vol}
+                            {profile}
                           </button>
-                        ))}
-                      </div>
+                          {/* Sibling, not nested: a button inside a button is
+                              invalid HTML and React warns about it. */}
+                          {compareMode && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCompareProfile(profile);
+                              }}
+                              aria-pressed={compareProfileNames.has(profile)}
+                              className="riscv-pin-btn px-1 py-0.5 rounded border text-[11px] inline-flex items-center justify-center transition-all"
+                              title={
+                                compareProfileNames.has(profile)
+                                  ? `Remove ${profile} from comparison`
+                                  : `Pin ${profile} to comparison`
+                              }
+                            >
+                              <GitCompare
+                                size={9}
+                                strokeWidth={compareProfileNames.has(profile) ? 2.5 : 2}
+                              />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Vertical Divider */}
+                    <div className="h-5 w-px bg-slate-700/60 mx-2" />
+
+                    {/* Volumes */}
+                    <div className="flex gap-1 bg-slate-500/10 p-1 rounded-xl border border-slate-500/20">
+                      {['I', 'II'].map((vol) => (
+                        <button
+                          key={vol}
+                          onClick={() =>
+                            setActiveVolume((current) => {
+                              setActiveProfile(null);
+                              setSelectedInstruction(null);
+                              setSearchMatches(null);
+                              return current === vol ? null : vol;
+                            })
+                          }
+                          aria-pressed={activeVolume === vol}
+                          className={[
+                            'px-3 py-1.5 text-[12px] rounded-lg transition-all duration-200 font-medium whitespace-nowrap shrink-0',
+                            activeVolume === vol
+                              ? 'bg-slate-700/80 text-white shadow-inner border border-slate-500/50'
+                              : 'text-slate-300 hover:text-white hover:bg-slate-700/40 border border-transparent hover:border-slate-600/30',
+                          ].join(' ')}
+                        >
+                          Vol {vol}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -2447,7 +2463,7 @@ const RISCVExplorer = () => {
                     stays neutral at all times, a mode takes its accent only
                     while it is ON, so the loudest control in the toolbar is
                     always a mode that is actually running. */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+                <div className="flex items-center gap-1 shrink-0">
                   {/* Encoder Validator - Sleek Outline Button */}
                   <button
                     type="button"
@@ -2482,10 +2498,22 @@ const RISCVExplorer = () => {
                     // Tailwind amber, which has no light-theme remapping and
                     // measured 1.33:1 on the pastel ground.
                     data-tooltip="See how the 32-bit opcode space is allocated"
-                    title="See how the 32-bit opcode space is allocated"
                   >
                     <Grid3x3 size={14} className="opacity-80" />
                     <span className="whitespace-nowrap">Encoding Map</span>
+                  </button>
+
+                  {/* Custom Extension Sandbox — interactive design in custom-0..3 space */}
+                  <button
+                    type="button"
+                    onClick={() => setSandboxOpen(true)}
+                    aria-haspopup="dialog"
+                    aria-expanded={sandboxOpen}
+                    className="group inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-300 whitespace-nowrap border text-blue-500 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-500/50 shadow-sm"
+                    data-tooltip="A safe sandbox to design, test, and validate your own custom RISC-V extensions and instructions"
+                  >
+                    <FlaskConical size={14} className="opacity-80" />
+                    <span className="whitespace-nowrap">Extension Sandbox</span>
                   </button>
 
                   {/* Theme toggle relocated to header */}
@@ -3587,6 +3615,53 @@ const RISCVExplorer = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* 5. Custom / Sandbox Extensions */}
+                {formattedSandboxExts.length > 0 && (
+                  <div
+                    className="col-span-full pt-5"
+                    style={{ borderTop: '1px solid var(--riscv-border)' }}
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <FlaskConical
+                          size={13}
+                          style={{ color: 'var(--riscv-accent-4, #60a5fa)' }}
+                        />
+                        <h3
+                          className="text-[12px] font-semibold uppercase tracking-widest"
+                          style={{ color: 'var(--riscv-accent-4, #60a5fa)' }}
+                        >
+                          Custom / Sandbox Extensions
+                        </h3>
+                        <span className="text-[11px]" style={{ color: 'var(--riscv-text-3)' }}>
+                          {formattedSandboxExts.length} custom
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSandboxOpen(true)}
+                        className="text-[11px] font-semibold flex items-center gap-1 hover:underline"
+                        style={{ color: 'var(--riscv-accent-4, #60a5fa)' }}
+                      >
+                        <span>Manage in Sandbox</span>
+                        <ArrowUpRight size={11} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {formattedSandboxExts.map((item) => (
+                        <ExtensionTile
+                          key={item.id}
+                          data={item}
+                          searchIndex={extensionSearchIndexById.get(item.id)}
+                          {...tileProps}
+                          onToggleWorkspace={undefined}
+                          colorClass="border-blue-500/40 bg-blue-950/30 text-blue-100"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div
@@ -3687,7 +3762,7 @@ const RISCVExplorer = () => {
               <div className="flex-1 overflow-y-auto overscroll-contain p-4 pt-3">
                 {selectedExt ? (
                   <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="mb-6 flex items-start justify-between gap-3">
+                    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <a
                           href={selectedExt.url || 'https://github.com/riscv/riscv-isa-manual'}
@@ -3706,7 +3781,7 @@ const RISCVExplorer = () => {
                         </a>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         {/* Ratification status. Without this, a proposal such as
                             Zvabd reads exactly as settled as Zbb, which is the
                             same hazard as publishing a withdrawn encoding: the
@@ -3779,6 +3854,18 @@ const RISCVExplorer = () => {
                             Discontinued
                           </span>
                         )}
+                        {selectedExt.isSandbox && (
+                          <span
+                            className="px-2 py-1 rounded-md text-[11px] font-mono uppercase tracking-wide border whitespace-nowrap"
+                            style={{
+                              background: 'rgba(59,130,246,0.15)',
+                              color: 'var(--riscv-accent-4, #60a5fa)',
+                              borderColor: 'rgba(59,130,246,0.4)',
+                            }}
+                          >
+                            Custom (Sandbox)
+                          </span>
+                        )}
                         {/* The address bar already carries ?ext=<id>, but a
                             button is the discoverable route and works on mobile,
                             where copying the URL is fiddly. */}
@@ -3792,6 +3879,22 @@ const RISCVExplorer = () => {
                           <Link2 size={12} />
                           {permalinkCopied ? 'Copied' : 'Link'}
                         </button>
+                        {selectedExt.isSandbox && (
+                          <button
+                            type="button"
+                            onClick={() => setSandboxOpen(true)}
+                            aria-label="Edit this extension in the sandbox"
+                            title="Edit this extension in the sandbox"
+                            className="riscv-btn inline-flex items-center gap-1 px-2 py-1 text-[11px]"
+                            style={{
+                              borderColor: 'rgba(59,130,246,0.4)',
+                              color: 'var(--riscv-accent-4, #60a5fa)',
+                            }}
+                          >
+                            <FlaskConical size={12} />
+                            <span>Edit in Sandbox</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -4422,12 +4525,15 @@ const RISCVExplorer = () => {
           <EncodingMap
             open={encodingMapOpen}
             onClose={() => setEncodingMapOpen(false)}
-            catalog={extensions}
+            catalog={allExtensionsFlat}
+            sandboxExtensions={sandboxExtensions}
             onSelectExtension={(id) => {
-              const target = Object.values(extensions)
-                .flat()
-                .find((e) => e && e.id === id);
+              const target = allExtsList.find((e) => e && e.id === id);
               if (target) handleSelectExt(target);
+            }}
+            onOpenSandbox={() => {
+              setEncodingMapOpen(false);
+              setSandboxOpen(true);
             }}
           />
         </React.Suspense>
@@ -5559,6 +5665,15 @@ const RISCVExplorer = () => {
           />
         </React.Suspense>
       )}
+
+      {/* ── Custom Extension Sandbox ───────────────────────────────────── */}
+      <SandboxPanel
+        open={sandboxOpen}
+        onClose={() => setSandboxOpen(false)}
+        catalog={allExtsList}
+        extensions={sandboxExtensions}
+        onUpdateExtensions={setSandboxExtensions}
+      />
 
       {/* ── Ask AI Launcher ── */}
       <AskAiLauncher context={askAiContext} />

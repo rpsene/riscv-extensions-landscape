@@ -74,16 +74,32 @@ export const COMPILER_COMPAT_NOTES = [
 //       'B' was ratified March 2024 (Zba + Zbb + Zbs).
 //       'E' is an alternative base to 'I' (RV32E, RV64E: 16 GPRs).
 export const SINGLE_LETTER_CANONICAL_ORDER = [
-  'i', 'e', 'm', 'a', 'f', 'd', 'q', 'c', 'b', 'j', 't', 'p', 'v', 'n', 'h', 's', 'u'
+  'i',
+  'e',
+  'm',
+  'a',
+  'f',
+  'd',
+  'q',
+  'c',
+  'b',
+  'j',
+  't',
+  'p',
+  'v',
+  'n',
+  'h',
+  's',
+  'u',
 ];
 
 // Mapping from canonical base extension ID (in riscv_extensions.json) to prefix string
 export const BASE_ISA_PREFIX_MAP = {
-  'RV32I':  { xlen: 32,  base: 'i', id: 'RV32I' },
-  'RV64I':  { xlen: 64,  base: 'i', id: 'RV64I' },
-  'RV32E':  { xlen: 32,  base: 'e', id: 'RV32E' },
-  'RV64E':  { xlen: 64,  base: 'e', id: 'RV64E' },
-  'RV128I': { xlen: 128, base: 'i', id: 'RV128I' },
+  RV32I: { xlen: 32, base: 'i', id: 'RV32I' },
+  RV64I: { xlen: 64, base: 'i', id: 'RV64I' },
+  RV32E: { xlen: 32, base: 'e', id: 'RV32E' },
+  RV64E: { xlen: 64, base: 'e', id: 'RV64E' },
+  RV128I: { xlen: 128, base: 'i', id: 'RV128I' },
 };
 
 export const BASE_ISA_IDS = new Set(Object.keys(BASE_ISA_PREFIX_MAP));
@@ -162,7 +178,7 @@ const NON_ISA_EXTENSION_IDS = new Set(['RERI', 'HTI']);
 export const SHORTHAND_BUNDLES = {
   Zkn: ['Zbkb', 'Zbkc', 'Zbkx', 'Zknd', 'Zkne', 'Zknh'],
   Zks: ['Zbkb', 'Zbkc', 'Zbkx', 'Zksed', 'Zksh'],
-  Zk:  ['Zbkb', 'Zbkc', 'Zbkx', 'Zknd', 'Zkne', 'Zknh', 'Zkn', 'Zkr', 'Zkt'],
+  Zk: ['Zbkb', 'Zbkc', 'Zbkx', 'Zknd', 'Zkne', 'Zknh', 'Zkn', 'Zkr', 'Zkt'],
 };
 
 /**
@@ -214,7 +230,11 @@ export function absorbedByShorthand(selectedIds, bundles = SHORTHAND_BUNDLES) {
 export const SATP_MODE_IDS = new Set(['Sv32', 'Sv39', 'Sv48', 'Sv57']);
 
 export const NON_MARCH_IDS = new Set([
-  'K', 'N', 'P', 'S', 'U',   // privilege levels and UI grouping tags
+  'K',
+  'N',
+  'P',
+  'S',
+  'U', // privilege levels and UI grouping tags
   ...SATP_MODE_IDS,
 ]); // B removed — ratified, decode-accept + explicit-encode
 
@@ -281,8 +301,7 @@ function buildLookup(allExts) {
  * @returns {boolean}
  */
 function isIncompatible(a, b) {
-  return (INCOMPATIBLE_WITH[a] || []).includes(b)
-      || (INCOMPATIBLE_WITH[b] || []).includes(a);
+  return (INCOMPATIBLE_WITH[a] || []).includes(b) || (INCOMPATIBLE_WITH[b] || []).includes(a);
 }
 
 /**
@@ -384,15 +403,16 @@ export function parseMarchString(marchStr, allExts) {
     if (ch === 'g') {
       out.gExpanded = true;
       out.warnings.push(
-        '"g" expanded to: ' + G_EXPANSION_TOKENS.join(', ') +
-        '. Source: RISC-V ISA Spec §27 + GCC 12+/LLVM. ' +
-        'Encoder will always emit explicit tokens, never "g".'
+        '"g" expanded to: ' +
+          G_EXPANSION_TOKENS.join(', ') +
+          '. Source: RISC-V ISA Spec §27 + GCC 12+/LLVM. ' +
+          'Encoder will always emit explicit tokens, never "g".',
       );
       for (const t of G_EXPANSION_TOKENS) tokens.push(t);
     } else if (ch === 'b') {
       out.warnings.push(
         '"b" expanded to: zba, zbb, zbs. Source: Ratified B extension (March 2024). ' +
-        'Encoder will emit explicit Z-extensions for broader toolchain compatibility.'
+          'Encoder will emit explicit Z-extensions for broader toolchain compatibility.',
       );
       tokens.push('zba', 'zbb', 'zbs', 'b');
     } else {
@@ -431,7 +451,7 @@ export function parseMarchString(marchStr, allExts) {
         out.unknownTokens.push(token);
         out.warnings.push(
           `"${token.toUpperCase()}" is in the extension catalog but is NOT a valid -march token ` +
-          `(UI grouping tag or non-ISA entry). It has been ignored.`
+            `(UI grouping tag or non-ISA entry). It has been ignored.`,
         );
         continue;
       }
@@ -489,11 +509,11 @@ export function buildMarchString(selectedIds, _allExts) {
   }
 
   // 1. Detect Base ISA
-  const baseId = selectedIds.find(id => BASE_ISA_IDS.has(id));
+  const baseId = selectedIds.find((id) => BASE_ISA_IDS.has(id));
   if (!baseId) {
     out.warnings.push(
       'Cannot generate a valid -march string without a base ISA. ' +
-      'Please select RV32I, RV64I, RV32E, RV64E, or RV128I.'
+        'Please select RV32I, RV64I, RV32E, RV64E, or RV128I.',
     );
     return out;
   }
@@ -525,7 +545,22 @@ export function buildMarchString(selectedIds, _allExts) {
     }
 
     if (SPEC_VERSION_TAG_PATTERN.test(id)) {
-      out.excluded.push({ id, reason: 'Privileged spec version compliance tag — not an -march option' });
+      out.excluded.push({
+        id,
+        reason: 'Privileged spec version compliance tag — not an -march option',
+      });
+      continue;
+    }
+    const isSandboxExt =
+      id.includes('__') ||
+      id.endsWith('__sandbox') ||
+      (Array.isArray(_allExts) && _allExts.some((e) => e && e.id === id && e.isSandbox));
+    if (isSandboxExt) {
+      out.excluded.push({
+        id,
+        reason:
+          'Sandbox extension proposal — not a ratified standard or compiler-supported extension',
+      });
       continue;
     }
     if (NON_ISA_EXTENSION_IDS.has(id)) {
@@ -547,7 +582,8 @@ export function buildMarchString(selectedIds, _allExts) {
     if (id.toLowerCase() === 'b') {
       out.excluded.push({
         id: 'B',
-        reason: 'Ratified but pending broad toolchain support for single-letter "b". Explicit Zba_Zbb_Zbs emitted instead.'
+        reason:
+          'Ratified but pending broad toolchain support for single-letter "b". Explicit Zba_Zbb_Zbs emitted instead.',
       });
       continue;
     }
@@ -563,7 +599,7 @@ export function buildMarchString(selectedIds, _allExts) {
           reason: `Mutually exclusive with base ISA ${baseInfo.id} — the I and E base ISAs cannot be combined`,
         });
         out.warnings.push(
-          `"${id}" was dropped: it names a base ISA that is mutually exclusive with ${baseInfo.id}.`
+          `"${id}" was dropped: it names a base ISA that is mutually exclusive with ${baseInfo.id}.`,
         );
       }
       continue;
@@ -581,7 +617,7 @@ export function buildMarchString(selectedIds, _allExts) {
       });
       out.warnings.push(
         `"${id}" is not architecturally valid with ${baseInfo.id} and has been excluded ` +
-        `from the generated -march string.`
+          `from the generated -march string.`,
       );
       continue;
     }
@@ -603,11 +639,11 @@ export function buildMarchString(selectedIds, _allExts) {
 
   // Deduplicate tokens
   const uniqSingles = [...new Set(singles)];
-  const uniqMultis  = [...new Set(multis)];
+  const uniqMultis = [...new Set(multis)];
 
   const prefix = `rv${baseInfo.xlen}${baseInfo.base}`;
   const singleStr = uniqSingles.join('');
-  const multiStr  = uniqMultis.length > 0 ? '_' + uniqMultis.join('_') : '';
+  const multiStr = uniqMultis.length > 0 ? '_' + uniqMultis.join('_') : '';
 
   out.march = `${prefix}${singleStr}${multiStr}`;
   return out;
@@ -645,7 +681,7 @@ export function buildCombinedCatalog(selectedIds, allExts) {
   if (!selectedIds || selectedIds.length === 0) return [];
 
   const lookup = buildLookup(allExts);
-  const selectedBaseId = selectedIds.find(id => BASE_ISA_IDS.has(id));
+  const selectedBaseId = selectedIds.find((id) => BASE_ISA_IDS.has(id));
 
   // 1. Determine the True Owner for each tag in the catalog
   const tagToTrueOwner = new Map();
@@ -695,7 +731,7 @@ export function buildCombinedCatalog(selectedIds, allExts) {
 
       // CRITICAL: If the True Owner wasn't explicitly selected by the user, EXCLUDE IT.
       // This prevents "ghost" Zicsr instructions from appearing when only RV32I is selected.
-      if (!selectedIds.some(sel => sel.toLowerCase() === trueOwner.id.toLowerCase())) {
+      if (!selectedIds.some((sel) => sel.toLowerCase() === trueOwner.id.toLowerCase())) {
         continue;
       }
 
@@ -705,7 +741,7 @@ export function buildCombinedCatalog(selectedIds, allExts) {
 
       if (byKey.has(dedupKey)) {
         const entry = byKey.get(dedupKey);
-        if (!entry.sources.some(s => s.extId === trueOwner.id)) {
+        if (!entry.sources.some((s) => s.extId === trueOwner.id)) {
           entry.sources.push({ extId: trueOwner.id, extName: trueOwner.name || trueOwner.id });
         }
       } else {

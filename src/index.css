@@ -170,6 +170,10 @@ pre,
   background: var(--riscv-border-2);
 }
 
+.scrollbar-stable {
+  scrollbar-gutter: stable;
+}
+
 /* ─── Animations ─────────────────────────────────────────────────────────── */
 @keyframes fadeInUp {
   from {
@@ -2413,7 +2417,37 @@ pre,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .riscv-evo__pt {
-    transition: none;
+  .riscv-evo__pt,
+  .sandbox-bit-cell,
+  .sandbox-panel,
+  .sandbox-panel * {
+    animation: none !important;
+    transition: none !important;
   }
+}
+
+/* Custom Extension Sandbox — interactive 32-bit instruction editor */
+.sandbox-bit-cell {
+  height: 32px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(9px, 0.9vw, 13px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+  min-width: 0;
+  padding: 0;
+}
+.sandbox-bit-cell:hover {
+  background: var(--riscv-tint-4) !important;
+  color: var(--riscv-text) !important;
+}
+.sandbox-bit-cell:focus-visible {
+  outline: 2px solid var(--riscv-accent-4, #60a5fa);
+  outline-offset: -2px;
+  z-index: 10;
 }
