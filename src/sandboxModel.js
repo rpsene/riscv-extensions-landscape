@@ -241,11 +241,18 @@ export function createExtension(
     const primaryOpcode =
       typeof baseExtData.primaryOpcode === 'number'
         ? baseExtData.primaryOpcode
-        : (baseExtData.opcode ?? 0x57);
-    // Use a unique proposal ID (never a valid catalog id — __ is not allowed in RISC-V extension
-    // names). Sharing the base extension's id caused it to overwrite the real catalog entry in
-    // extensionSearchIndexById and produced duplicate React keys for multiple proposals to the
-    // same extension. baseExtensionId is the authoritative reference back to the real extension.
+        : typeof baseExtData.opcode === 'number'
+          ? baseExtData.opcode
+          : null;
+    if (primaryOpcode == null) {
+      return null;
+    }
+
+    // Use a unique proposal ID (${baseExtData.id}__sandbox) that never collides
+    // with real catalog extension IDs (which cannot contain double underscores per
+    // RISC-V naming conventions). This ensures the proposal cannot shadow the real
+    // extension in extensionSearchIndexById. In SandboxPanel, createStandardAddition
+    // enforces at most one addition proposal per base extension.
     const proposalId = `${baseExtData.id}__sandbox`;
     return {
       id: proposalId,

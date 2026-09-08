@@ -111,9 +111,9 @@ test('overlapExampleWord produces a valid concrete colliding 32-bit word', () =>
   assert.equal(patternsOverlap(aMatch, aMask, bMatch, bMask), true);
   const word = overlapExampleWord(aMatch, aMask, bMatch, bMask);
   // Word must satisfy a's constraints
-  assert.equal((word & aMask), (aMatch & aMask));
+  assert.equal(word & aMask, aMatch & aMask);
   // Word must satisfy b's constraints
-  assert.equal((word & bMask), (bMatch & bMask));
+  assert.equal(word & bMask, bMatch & bMask);
 });
 
 // ---------------------------------------------------------------------------
@@ -122,7 +122,7 @@ test('overlapExampleWord produces a valid concrete colliding 32-bit word', () =>
 
 test('OPCODES contains the 32 spaces including 4 reserved custom spaces from RISC-V specification', () => {
   assert.equal(OPCODES.length, 32);
-  const custom = OPCODES.filter(c => c.type === 'custom');
+  const custom = OPCODES.filter((c) => c.type === 'custom');
   assert.equal(custom.length, 4);
   const opcodes = custom.map((c) => c.value);
   assert.deepEqual(opcodes, [0x0b, 0x2b, 0x5b, 0x7b]);
@@ -135,7 +135,7 @@ test('enforcePrefix and validateExtensionId follow RISC-V naming conventions', (
   assert.equal(enforcePrefix('myaccel', false), 'Xmyaccel');
   assert.equal(enforcePrefix('Xmyaccel', false), 'Xmyaccel');
   assert.equal(enforcePrefix('xmyaccel', false), 'Xmyaccel');
-  
+
   assert.equal(enforcePrefix('myaccel', true), 'Zmyaccel');
   assert.equal(enforcePrefix('Zmyaccel', true), 'Zmyaccel');
 
@@ -357,7 +357,9 @@ test('validateInstruction flips safe-zone rules for Mode B per RISC-V ISA §27',
   const customDiag = validateInstruction(customInStandard, catalogInstructions, [], vContext);
   const customErrors = customDiag.filter((d) => d.severity === 'error');
   assert.ok(
-    customErrors.some((e) => e.message.includes('strictly reserved for non-standard vendor extensions')),
+    customErrors.some((e) =>
+      e.message.includes('strictly reserved for non-standard vendor extensions'),
+    ),
     'Custom space must be an error in standard-track Mode B',
   );
 
@@ -393,9 +395,16 @@ test('validateInstruction flips safe-zone rules for Mode B per RISC-V ISA §27',
     encoding: '0000000----------000-----0010011', // 0x13 OP-IMM
     format: 'I',
   };
-  const foreignDiag = validateInstruction(foreignStandardAddition, catalogInstructions, [], vContext);
+  const foreignDiag = validateInstruction(
+    foreignStandardAddition,
+    catalogInstructions,
+    [],
+    vContext,
+  );
   assert.ok(
-    foreignDiag.some((d) => d.severity === 'warning' && d.message.includes('belongs to standard space outside V')),
+    foreignDiag.some(
+      (d) => d.severity === 'warning' && d.message.includes('belongs to standard space outside V'),
+    ),
     'Foreign standard space must be flagged with a warning',
   );
 });
@@ -459,12 +468,7 @@ test('collision detection identifies conflicts against C.ADDI4SPN with zero matc
     mnemonic: 'TEST_ZERO_MATCH',
     encoding: '00000000000000000000000000000000',
   };
-  const diags = validateInstruction(
-    overlappingInstr,
-    allInstructionEncodings(catalog),
-    [],
-    null,
-  );
+  const diags = validateInstruction(overlappingInstr, allInstructionEncodings(catalog), [], null);
   assert.ok(
     diags.some((d) => d.conflictWith === 'C.ADDI4SPN'),
     'Must report conflict with C.ADDI4SPN even though its match is 0n',
@@ -476,12 +480,7 @@ test('collision detection identifies conflicts against RV64-specific SLLI mask',
     mnemonic: 'SLLI_RV64_COLLIDE',
     encoding: '0000001----------001-----0010011',
   };
-  const diags = validateInstruction(
-    rv64SlliOverlap,
-    allInstructionEncodings(catalog),
-    [],
-    null,
-  );
+  const diags = validateInstruction(rv64SlliOverlap, allInstructionEncodings(catalog), [], null);
   assert.ok(
     diags.some((d) => d.conflictWith === 'SLLI'),
     'Must report conflict with SLLI',
@@ -652,6 +651,34 @@ test('index clamp on delete follows removed index properly', () => {
   assert.equal(clampAfterDelete(1, 1, 1), 0, 'Deleting selected item clamps to remaining range');
 });
 
+test('createExtension refuses Mode B addition without valid 32-bit opcode (no OP-V 0x57 fallback)', () => {
+  const badAddition = createExtension('', true, 'addition', {
+    id: 'Zcb',
+    name: 'Zcb',
+    desc: 'Compressed instructions',
+    // primaryOpcode missing / undefined
+  });
+  assert.equal(
+    badAddition,
+    null,
+    'Must return null instead of silently defaulting to vector opcode 0x57',
+  );
+});
 
+test('refuses duplicate Mode B proposals to the same base extension', () => {
+  const existingExtensions = [
+    {
+      id: 'Zba__sandbox',
+      mode: 'addition',
+      baseExtensionId: 'Zba',
+      instructions: [],
+    },
+  ];
 
-
+  const targetId = 'Zba';
+  const existingIdx = existingExtensions.findIndex(
+    (e) =>
+      e.mode === 'addition' && (e.baseExtensionId === targetId || e.id === `${targetId}__sandbox`),
+  );
+  assert.equal(existingIdx, 0, 'Must detect existing proposal targeting same base extension');
+});

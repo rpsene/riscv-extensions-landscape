@@ -164,6 +164,7 @@ export default function SandboxPanel({
   // Mode B Intent Modal & Picker state
   const [intentModalOpen, setIntentModalOpen] = React.useState(false);
   const [intentModalStep, setIntentModalStep] = React.useState('intent'); // 'intent' | 'picker'
+  const [intentModalNotice, setIntentModalNotice] = React.useState(null);
   const [catalogSearchQuery, setCatalogSearchQuery] = React.useState('');
 
   // Sibling Instruction Clone Popover state
@@ -322,9 +323,32 @@ export default function SandboxPanel({
 
   const createStandardAddition = (targetCatalogExt) => {
     if (!targetCatalogExt || extensions.length >= MAX_EXTENSIONS) return;
-    commitHistory(`Add Standard Addition to ${targetCatalogExt.id}`);
+    setIntentModalNotice(null);
+
+    // Guard against picking the same base extension twice
+    const existingIdx = extensions.findIndex(
+      (e) =>
+        e.mode === 'addition' &&
+        (e.baseExtensionId === targetCatalogExt.id || e.id === `${targetCatalogExt.id}__sandbox`),
+    );
+    if (existingIdx !== -1) {
+      setSelectedExtIdx(existingIdx);
+      setSelectedInstrIdx(-1);
+      setIntentModalOpen(false);
+      return;
+    }
+
+    // Refuse and surface if extension has no 32-bit major opcodes allocated (e.g. compressed-only Zcb/Zca)
     const opcodes = getExtensionMajorOpcodes(targetCatalogExt);
-    const primaryOpcode = opcodes[0] ?? 0x57;
+    if (opcodes.length === 0) {
+      setIntentModalNotice(
+        `Cannot create 32-bit addition for "${targetCatalogExt.id}": this extension operates entirely in 16-bit compressed space (inst[1:0] \u2260 11) or has no 32-bit major opcodes allocated. The sandbox models 32-bit base instructions.`,
+      );
+      return;
+    }
+
+    commitHistory(`Add Standard Addition to ${targetCatalogExt.id}`);
+    const primaryOpcode = opcodes[0];
     const newExt = createExtension('', true, 'addition', {
       id: targetCatalogExt.id,
       name: targetCatalogExt.name,
@@ -332,6 +356,7 @@ export default function SandboxPanel({
       primaryOpcode,
       tags: targetCatalogExt.tags,
     });
+    if (!newExt) return;
     setExtensions((prev) => [...prev, newExt]);
     setSelectedExtIdx(extensions.length);
     setSelectedInstrIdx(-1);
@@ -678,6 +703,7 @@ export default function SandboxPanel({
               <button
                 type="button"
                 onClick={() => {
+                  setIntentModalNotice(null);
                   setIntentModalStep('intent');
                   setCatalogSearchQuery('');
                   setIntentModalOpen(true);
@@ -740,6 +766,7 @@ export default function SandboxPanel({
                   <button
                     type="button"
                     onClick={() => {
+                      setIntentModalNotice(null);
                       setIntentModalStep('intent');
                       setCatalogSearchQuery('');
                       setIntentModalOpen(true);
@@ -789,6 +816,7 @@ export default function SandboxPanel({
                         <button
                           type="button"
                           onClick={() => {
+                            setIntentModalNotice(null);
                             setIntentModalStep('picker');
                             setCatalogSearchQuery('');
                             setIntentModalOpen(true);
@@ -1983,6 +2011,32 @@ export default function SandboxPanel({
                     </div>
                   </div>
 
+                  {intentModalNotice && (
+                    <div
+                      className="mb-3 p-2.5 rounded-lg text-[11.5px] border flex items-start gap-2"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        borderColor: 'var(--riscv-red, #ef4444)',
+                        color: 'var(--riscv-text)',
+                      }}
+                    >
+                      <AlertCircle
+                        size={14}
+                        className="shrink-0 mt-0.5"
+                        style={{ color: 'var(--riscv-red, #ef4444)' }}
+                      />
+                      <div className="flex-1 leading-snug">{intentModalNotice}</div>
+                      <button
+                        type="button"
+                        onClick={() => setIntentModalNotice(null)}
+                        className="p-0.5 rounded hover:bg-white/10"
+                        title="Dismiss"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+
                   <div className="relative mb-3">
                     <Search
                       size={14}
@@ -2062,6 +2116,14 @@ export default function SandboxPanel({
                       .slice(0, 40)
                       .map((c) => {
                         const instrCount = Object.keys(c.instructions || {}).length;
+                        const alreadyAdded = extensions.some(
+                          (e) =>
+                            e.mode === 'addition' &&
+                            (e.baseExtensionId === c.id || e.id === `${c.id}__sandbox`),
+                        );
+                        const extOpcodes = getExtensionMajorOpcodes(c);
+                        const isCompressedOnly = extOpcodes.length === 0;
+
                         return (
                           <button
                             key={c.id}
@@ -2069,16 +2131,24 @@ export default function SandboxPanel({
                             onClick={() => createStandardAddition(c)}
                             className="text-left p-2 rounded transition-colors flex items-center justify-between border"
                             style={{
-                              borderColor: 'transparent',
-                              background: 'transparent',
+                              borderColor: alreadyAdded ? 'rgba(59,130,246,0.3)' : 'transparent',
+                              background: alreadyAdded ? 'rgba(59,130,246,0.06)' : 'transparent',
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.background = 'var(--riscv-surface)';
-                              e.currentTarget.style.borderColor = 'var(--riscv-border)';
+                              e.currentTarget.style.background = alreadyAdded
+                                ? 'rgba(59,130,246,0.12)'
+                                : 'var(--riscv-surface)';
+                              e.currentTarget.style.borderColor = alreadyAdded
+                                ? 'rgba(59,130,246,0.5)'
+                                : 'var(--riscv-border)';
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.background = 'transparent';
-                              e.currentTarget.style.borderColor = 'transparent';
+                              e.currentTarget.style.background = alreadyAdded
+                                ? 'rgba(59,130,246,0.06)'
+                                : 'transparent';
+                              e.currentTarget.style.borderColor = alreadyAdded
+                                ? 'rgba(59,130,246,0.3)'
+                                : 'transparent';
                             }}
                           >
                             <div className="min-w-0 flex-1 pr-2">
@@ -2107,15 +2177,41 @@ export default function SandboxPanel({
                                 </p>
                               )}
                             </div>
-                            <span
-                              className="shrink-0 px-2 py-0.5 rounded text-[10px] font-mono"
-                              style={{
-                                background: 'var(--riscv-surface)',
-                                color: 'var(--riscv-text-2)',
-                              }}
-                            >
-                              {instrCount} ops
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {alreadyAdded ? (
+                                <span
+                                  className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold"
+                                  style={{
+                                    background: 'rgba(59,130,246,0.15)',
+                                    color: 'var(--riscv-accent-4)',
+                                    border: '1px solid rgba(59,130,246,0.3)',
+                                  }}
+                                >
+                                  Proposal Open
+                                </span>
+                              ) : isCompressedOnly ? (
+                                <span
+                                  className="px-2 py-0.5 rounded text-[10px] font-mono"
+                                  style={{
+                                    background: 'rgba(239,68,68,0.1)',
+                                    color: 'var(--riscv-red, #ef4444)',
+                                    border: '1px solid rgba(239,68,68,0.25)',
+                                  }}
+                                  title="No 32-bit major opcodes allocated"
+                                >
+                                  16-bit only
+                                </span>
+                              ) : null}
+                              <span
+                                className="px-2 py-0.5 rounded text-[10px] font-mono"
+                                style={{
+                                  background: 'var(--riscv-surface)',
+                                  color: 'var(--riscv-text-2)',
+                                }}
+                              >
+                                {instrCount} ops
+                              </span>
+                            </div>
                           </button>
                         );
                       })}
