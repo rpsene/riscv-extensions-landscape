@@ -91,10 +91,10 @@ export function parseVariables(text) {
    * when `name:` is followed by `location:`, which no later key in these files
    * produces, so the loose capture is safe.
    */
-  const block = text.match(/^\s*variables:\n([\s\S]*)/m);
+  const block = text.match(/^\s*variables:\r?\n([\s\S]*)/m);
   if (!block) return [];
   const out = [];
-  const re = /-\s*name:\s*(\w+)\s*\n\s*location:\s*(\d+)-(\d+)([\s\S]*?)(?=\n\s*-\s*name:|$)/g;
+  const re = /-\s*name:\s*(\w+)\s*\r?\n\s*location:\s*(\d+)-(\d+)([\s\S]*?)(?=\r?\n\s*-\s*name:|$)/g;
   for (const m of block[1].matchAll(re)) {
     const notList = m[4].match(/not:\s*\[([\s\S]*?)\]/);
     out.push({
@@ -124,13 +124,16 @@ export function parseVariables(text) {
  */
 function blockUnder(text, key) {
   const lines = text.split('\n');
-  const start = lines.findIndex((l) => l === `${key}:`);
+  // Trim trailing \r so CRLF checkouts (Windows, core.autocrlf=true) match the same
+  // way as LF checkouts. Without this, "definedBy:\r" !== "definedBy:" and every
+  // instruction falls back to its directory name — silently corrupting the report.
+  const start = lines.findIndex((l) => l.trimEnd() === `${key}:`);
   if (start === -1) return null;
   const body = [];
   for (let i = start + 1; i < lines.length; i += 1) {
     const line = lines[i];
     if (line.trim() !== '' && !/^\s/.test(line)) break;
-    body.push(line);
+    body.push(line.replace(/\r$/, ''));
   }
   return body.join('\n');
 }
