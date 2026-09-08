@@ -154,6 +154,8 @@ function ExtensionTile({
 
         {builderMode &&
           !isDiscontinued &&
+          !data.isSandbox &&
+          Boolean(onToggleWorkspace) &&
           (() => {
             const isLocked = inWorkspace && lockedExtensions.has(data.id);
             const lockedBy = isLocked ? lockedExtensions.get(data.id) : [];

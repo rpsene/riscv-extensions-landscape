@@ -1067,6 +1067,10 @@ const RISCVExplorer = () => {
         const arrToAdd = Array.isArray(idsToAdd) ? idsToAdd : [idsToAdd];
 
         for (const id of arrToAdd) {
+          if (!id || id.includes('__') || id.endsWith('__sandbox')) {
+            continue;
+          }
+
           if (isToggle && next.has(id)) {
             // If locked, we cannot toggle it off
             if (currentLocked.has(id)) {
@@ -3651,6 +3655,7 @@ const RISCVExplorer = () => {
                           data={item}
                           searchIndex={extensionSearchIndexById.get(item.id)}
                           {...tileProps}
+                          onToggleWorkspace={undefined}
                           colorClass="border-blue-500/40 bg-blue-950/30 text-blue-100"
                         />
                       ))}

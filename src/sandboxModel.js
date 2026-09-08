@@ -54,7 +54,7 @@ export const OPCODES = [
   { value: 0x13, name: 'OP-IMM', type: 'standard' },
   { value: 0x17, name: 'AUIPC', type: 'standard' },
   { value: 0x1b, name: 'OP-IMM-32', type: 'standard' },
-  { value: 0x1f, name: '48b', type: 'reserved' },
+  { value: 0x1f, name: '48b', type: 'instruction-length' },
   { value: 0x23, name: 'STORE', type: 'standard' },
   { value: 0x27, name: 'STORE-FP', type: 'standard' },
   { value: 0x2b, name: 'custom-1', type: 'custom' },
@@ -62,7 +62,7 @@ export const OPCODES = [
   { value: 0x33, name: 'OP', type: 'standard' },
   { value: 0x37, name: 'LUI', type: 'standard' },
   { value: 0x3b, name: 'OP-32', type: 'standard' },
-  { value: 0x3f, name: '64b', type: 'reserved' },
+  { value: 0x3f, name: '64b', type: 'instruction-length' },
   { value: 0x43, name: 'MADD', type: 'standard' },
   { value: 0x47, name: 'MSUB', type: 'standard' },
   { value: 0x4b, name: 'NMSUB', type: 'standard' },
@@ -70,7 +70,7 @@ export const OPCODES = [
   { value: 0x53, name: 'OP-FP', type: 'standard' },
   { value: 0x57, name: 'OP-V', type: 'standard' },
   { value: 0x5b, name: 'custom-2', type: 'custom' },
-  { value: 0x5f, name: '48b', type: 'reserved' },
+  { value: 0x5f, name: '48b', type: 'instruction-length' },
   { value: 0x63, name: 'BRANCH', type: 'standard' },
   { value: 0x67, name: 'JALR', type: 'standard' },
   { value: 0x6b, name: 'reserved', type: 'reserved' },
@@ -78,7 +78,7 @@ export const OPCODES = [
   { value: 0x73, name: 'SYSTEM', type: 'standard' },
   { value: 0x77, name: 'OP-VE', type: 'standard' },
   { value: 0x7b, name: 'custom-3', type: 'custom' },
-  { value: 0x7f, name: '>=80b', type: 'reserved' },
+  { value: 0x7f, name: '>=80b', type: 'instruction-length' },
 ].map((op) => ({ ...op, bits: op.value.toString(2).padStart(7, '0') }));
 
 // ---------------------------------------------------------------------------
@@ -561,6 +561,11 @@ export function validateInstruction(
       severity: 'warning',
       message: `Opcode 0x${opcodeVal.toString(16).padStart(2, '0')} is not a recognized RISC-V major opcode. It may be a non-standard or future-reserved value.`,
     });
+  } else if (opInfo && opInfo.type === 'instruction-length') {
+    diagnostics.push({
+      severity: 'error',
+      message: `Opcode 0x${opcodeVal.toString(16).padStart(2, '0')} (${opInfo.name}) is designated for expanded instruction-length encodings (${opInfo.name} instructions) per RISC-V ISA specification. It is not a valid 32-bit instruction opcode slot.`,
+    });
   } else if (isModeAddition) {
     if (opInfo && opInfo.type === 'custom') {
       diagnostics.push({
@@ -677,15 +682,15 @@ export function validateInstruction(
     const myKey = instr.mnemonic.toLowerCase().replace(/\./g, '_');
     const dupKeySibling = (otherSandboxInstructions || []).find((other) => {
       if (!other || !other.mnemonic || other === instr) return false;
-      return (
-        other.mnemonic !== instr.mnemonic &&
-        other.mnemonic.toLowerCase().replace(/\./g, '_') === myKey
-      );
+      return other.mnemonic.toLowerCase().replace(/\./g, '_') === myKey;
     });
     if (dupKeySibling) {
       diagnostics.push({
         severity: 'error',
-        message: `Mnemonic "${instr.mnemonic}" normalizes to the same riscv-opcodes key ("${myKey}") as "${dupKeySibling.mnemonic}". They will overwrite each other in export.`,
+        message:
+          dupKeySibling.mnemonic.toLowerCase() === instr.mnemonic.toLowerCase()
+            ? `Duplicate mnemonic "${instr.mnemonic}". Each instruction in an extension must have a unique mnemonic, or it will overwrite earlier definitions in export.`
+            : `Mnemonic "${instr.mnemonic}" normalizes to the same riscv-opcodes key ("${myKey}") as "${dupKeySibling.mnemonic}". They will overwrite each other in export.`,
       });
     }
   }

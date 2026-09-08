@@ -38,6 +38,7 @@ import {
   deserializeSandbox,
   normalizeSandboxExt,
 } from '../src/sandboxModel.js';
+import { buildMarchString } from '../src/marchUtils.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const catalog = JSON.parse(
@@ -681,4 +682,77 @@ test('refuses duplicate Mode B proposals to the same base extension', () => {
       e.mode === 'addition' && (e.baseExtensionId === targetId || e.id === `${targetId}__sandbox`),
   );
   assert.equal(existingIdx, 0, 'Must detect existing proposal targeting same base extension');
+});
+
+test('buildMarchString excludes sandbox proposal IDs from generated -march string', () => {
+  const allExts = Object.values(catalog).flat().filter(Boolean);
+  const res = buildMarchString(['RV64I', 'Zba__sandbox'], allExts);
+  assert.equal(res.march, 'rv64i', 'Must not include proposal ID Zba__sandbox in -march string');
+  assert.ok(
+    res.excluded.some((e) => e.id === 'Zba__sandbox'),
+    'Proposal ID must be recorded in excluded list',
+  );
+
+  const customExt = { id: 'Xcustom', isSandbox: true };
+  const res2 = buildMarchString(['RV32I', 'Xcustom'], [...allExts, customExt]);
+  assert.equal(res2.march, 'rv32i', 'Must not include isSandbox custom extension in -march string');
+  assert.ok(
+    res2.excluded.some((e) => e.id === 'Xcustom'),
+    'Sandbox custom extension must be recorded in excluded list',
+  );
+});
+
+test('validateInstruction flags exact duplicate mnemonics between sibling instructions', () => {
+  const instr1 = {
+    mnemonic: 'XMAC',
+    encoding: '0000000----------000-----0001011', // custom-0
+    format: 'R',
+  };
+  const instr2 = {
+    mnemonic: 'XMAC',
+    encoding: '0000001----------000-----0001011', // custom-0 with different funct7
+    format: 'R',
+  };
+
+  const diags = validateInstruction(instr1, catalogInstructions, [instr1, instr2], null);
+  const dupErrors = diags.filter(
+    (d) => d.severity === 'error' && d.message.includes('Duplicate mnemonic "XMAC"'),
+  );
+  assert.equal(
+    dupErrors.length,
+    1,
+    'Must emit error when two sibling instructions have identical mnemonics',
+  );
+});
+
+test('OPCODES classifies expanded instruction-length prefixes and validateInstruction rejects them', () => {
+  const reservedOps = OPCODES.filter((op) => op.type === 'reserved');
+  assert.deepEqual(
+    reservedOps.map((op) => op.value),
+    [0x6b],
+    'Only 0x6b is a genuine 32-bit reserved opcode slot',
+  );
+
+  const lengthPrefixes = OPCODES.filter((op) => op.type === 'instruction-length');
+  assert.deepEqual(
+    lengthPrefixes.map((op) => op.value),
+    [0x1f, 0x3f, 0x5f, 0x7f],
+    '0x1f, 0x3f, 0x5f, 0x7f are designated as instruction-length prefixes',
+  );
+
+  // Attempting to validate a 32-bit instruction with an instruction-length opcode (e.g. 0x7f)
+  const instr7f = {
+    mnemonic: 'BAD_LEN_PREFIX',
+    encoding: '0000000----------000-----0111111', // 0x7f (>=80b)
+    format: 'R',
+  };
+  const diags = validateInstruction(instr7f, catalogInstructions, [], null);
+  const lenErrors = diags.filter(
+    (d) => d.severity === 'error' && d.message.includes('expanded instruction-length encodings'),
+  );
+  assert.equal(
+    lenErrors.length,
+    1,
+    'Must emit error when attempting to place 32-bit instruction in instruction-length space',
+  );
 });
