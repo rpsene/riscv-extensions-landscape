@@ -46,6 +46,9 @@ function ExtensionTile({
   const highlighted = isHighlighted(data.id) || matchesSearch || isSelected;
   const dimmed = isDimmed(data.id) && !matchesSearch && !isSelected;
   const inWorkspace = workspaceIds.has(data.id);
+  // Derived from `data` rather than passed in, so tilePropsAreEqual needs no
+  // new comparison: it already returns false when `data` changes identity.
+  const instructionCount = Object.keys(data.instructions || {}).length;
   const inCompare = compareIds.has(data.id);
 
   return (
@@ -236,12 +239,39 @@ function ExtensionTile({
       {/* The short label, not `desc`. The tile is 190px wide - about 32
           characters a line, 65 in the two-line clamp - so a full description
           truncates into a fragment here. `desc` is shown in the details panel
-          when a tile is selected, where there is room for it. */}
-      <div
-        className="text-[11px] leading-snug line-clamp-2"
-        style={{ color: 'var(--riscv-text-2)' }}
-      >
-        {data.short || data.desc}
+          when a tile is selected, where there is room for it.
+
+          The instruction count shares this row rather than the name row above:
+          the corner controls are absolutely positioned over the name row's
+          right edge, so a count there would sit under the compare and "+"
+          buttons. */}
+      <div className="flex items-end justify-between gap-2">
+        <div
+          className="text-[11px] leading-snug line-clamp-2"
+          style={{ color: 'var(--riscv-text-2)' }}
+        >
+          {data.short || data.desc}
+        </div>
+        {/* Shown only when there are instructions to count. 122 of the 223
+            catalogue entries define none — Ziccamoa is a PMA rule, Sspmp is
+            CSR-only — and for those an empty list is the correct answer, not a
+            missing one. Printing "0" across more than half the grid would read
+            as absent data. Absence of the figure carries the same meaning
+            without the false alarm.
+
+            The number is this entry's OWN map, so the `members` bundles report
+            their union: Zvknc reads 27, Zce 54. */}
+        {instructionCount > 0 && (
+          <span
+            className="font-mono text-[10px] leading-none shrink-0"
+            style={{ color: 'var(--riscv-text-2)' }}
+            // A bare numeral means nothing read aloud, and nothing on hover.
+            aria-label={`${instructionCount} instructions`}
+            title={`${instructionCount} instructions`}
+          >
+            {instructionCount}
+          </span>
+        )}
       </div>
     </div>
   );
