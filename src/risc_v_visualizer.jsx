@@ -290,18 +290,26 @@ const findExtensionById = (id, extraExtensions = []) => {
 
 const extensionFromUrl = () => {
   if (typeof window === 'undefined') return null;
-  let sandboxExts = [];
   try {
-    const sandboxParam = new URLSearchParams(window.location.search).get('sandbox');
-    if (sandboxParam) sandboxExts = deserializeSandbox(sandboxParam);
-    else sandboxExts = loadSandbox();
+    const params = new URLSearchParams(window.location.search);
+    const sandboxParam = params.get('sandbox');
+    let sandboxExts = [];
+    // c: prefixes need async decompression \u2014 can't resolve synchronously.
+    // Fall back to localStorage so the ?ext= permalink still works on share links;
+    // the async useEffect below will load and select the correct sandbox extension
+    // once decompression finishes.
+    if (sandboxParam && !sandboxParam.startsWith('c:')) {
+      sandboxExts = deserializeSandbox(sandboxParam);
+    } else {
+      sandboxExts = loadSandbox();
+    }
+    return findExtensionById(
+      params.get(PERMALINK_PARAM),
+      sandboxExts.map(formatSandboxExtensionForCatalog),
+    );
   } catch {
-    /* ignore */
+    return null;
   }
-  return findExtensionById(
-    new URLSearchParams(window.location.search).get(PERMALINK_PARAM),
-    sandboxExts.map(formatSandboxExtensionForCatalog),
-  );
 };
 
 const permalinkFor = (extId) => {
@@ -631,12 +639,22 @@ const RISCVExplorer = () => {
   React.useEffect(() => {
     try {
       if (typeof window === 'undefined') return;
-      const param = new URLSearchParams(window.location.search).get('sandbox');
+      const params = new URLSearchParams(window.location.search);
+      const param = params.get('sandbox');
       if (param && param.startsWith('c:')) {
         deserializeSandboxAsync(param).then((fromUrl) => {
           if (Array.isArray(fromUrl) && fromUrl.length > 0) {
             setSandboxExtensions(fromUrl);
             setSandboxOpen(true);
+            // Resolve the ?ext= permalink against the newly-loaded sandbox extensions.
+            // extensionFromUrl ran synchronously before decompression, so a share link
+            // like ?ext=Xtest__sandbox&sandbox=c:... never selected the right extension.
+            const extParam = params.get(PERMALINK_PARAM);
+            if (extParam) {
+              const formatted = fromUrl.map(formatSandboxExtensionForCatalog);
+              const match = findExtensionById(extParam, formatted);
+              if (match) setSelectedExt(match);
+            }
           }
         });
       } else if (param) {
@@ -4502,7 +4520,7 @@ const RISCVExplorer = () => {
           <EncodingMap
             open={encodingMapOpen}
             onClose={() => setEncodingMapOpen(false)}
-            catalog={allExtsList}
+            catalog={allExtensionsFlat}
             sandboxExtensions={sandboxExtensions}
             onSelectExtension={(id) => {
               const target = allExtsList.find((e) => e && e.id === id);

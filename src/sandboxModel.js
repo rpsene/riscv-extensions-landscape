@@ -144,6 +144,27 @@ export const INSTRUCTION_FORMATS = {
       { name: 'rd', bits: [11, 7], variable: true },
     ],
   },
+  // B and J types from the base ISA spec (Figure 2.2).
+  // Present here so cloneFromCatalogInstruction can infer them from variable_fields
+  // (bimm12hi/lo → B, jimm20 → J) and so updateInstrField can preserve field names
+  // when a user edits a cloned branch or jump instruction's encoding.
+  B: {
+    label: 'B-type (branch)',
+    fields: [
+      { name: 'bimm12hi', bits: [31, 25], variable: true },
+      { name: 'rs2', bits: [24, 20], variable: true },
+      { name: 'rs1', bits: [19, 15], variable: true },
+      { name: 'funct3', bits: [14, 12], variable: true },
+      { name: 'bimm12lo', bits: [11, 7], variable: true },
+    ],
+  },
+  J: {
+    label: 'J-type (unconditional jump)',
+    fields: [
+      { name: 'jimm20', bits: [31, 12], variable: true },
+      { name: 'rd', bits: [11, 7], variable: true },
+    ],
+  },
 };
 
 /**
@@ -188,13 +209,18 @@ export function getExtensionMajorOpcodes(extensionCatalogEntry) {
     if (inst && inst.match) {
       try {
         const matchVal = typeof inst.match === 'bigint' ? inst.match : BigInt(inst.match);
+        // Skip 16-bit compressed instructions: inst[1:0] !== 11 means this is a C-extension
+        // encoding, not a 32-bit major opcode slot. Reading bits[6:0] of a 16-bit match
+        // produces opcode values like 0x71 that are not in the OPCODES table and break
+        // the allowed-opcodes list for Mode-B additions to any Zc*/C extension.
+        if (Number(matchVal & 0x3n) !== 3) continue;
         opcodes.add(Number(matchVal & 0x7fn));
       } catch {
         /* ignore malformed match */
       }
     } else if (inst && inst.encoding && inst.encoding.length === 32) {
       const opBits = inst.encoding.slice(25);
-      if (/^[01]{7}$/.test(opBits)) {
+      if (/^[01]{7}$/.test(opBits) && parseInt(opBits.slice(5), 2) === 3) {
         opcodes.add(parseInt(opBits, 2));
       }
     }
@@ -216,8 +242,13 @@ export function createExtension(
       typeof baseExtData.primaryOpcode === 'number'
         ? baseExtData.primaryOpcode
         : (baseExtData.opcode ?? 0x57);
+    // Use a unique proposal ID (never a valid catalog id — __ is not allowed in RISC-V extension
+    // names). Sharing the base extension's id caused it to overwrite the real catalog entry in
+    // extensionSearchIndexById and produced duplicate React keys for multiple proposals to the
+    // same extension. baseExtensionId is the authoritative reference back to the real extension.
+    const proposalId = `${baseExtData.id}__sandbox`;
     return {
-      id: baseExtData.id,
+      id: proposalId,
       mode: 'addition',
       baseExtensionId: baseExtData.id,
       isOfficial: true,
@@ -285,27 +316,46 @@ export function allInstructionEncodings(catalog) {
 /**
  * Clone an existing catalog instruction into a candidate instruction for standard addition.
  */
-export function cloneFromCatalogInstruction(catalogInstr, targetOpcode = null) {
+export function cloneFromCatalogInstruction(catalogInstr, _targetOpcode = null) {
   if (!catalogInstr) return null;
-  let encoding = catalogInstr.encoding;
-  if (!encoding && catalogInstr.match != null && catalogInstr.mask != null) {
-    const m =
-      typeof catalogInstr.match === 'bigint' ? catalogInstr.match : BigInt(catalogInstr.match);
-    const k = typeof catalogInstr.mask === 'bigint' ? catalogInstr.mask : BigInt(catalogInstr.mask);
-    encoding = matchMaskToEncoding(m, k);
+  if (catalogInstr.encoding && catalogInstr.encoding.length !== 32) {
+    return null;
   }
-  if (!encoding || encoding.length !== 32) {
-    const template = buildTemplate('R', targetOpcode ?? 0x57);
-    encoding = template ? template.encoding : '0000000----------000-----1010111';
+  let matchVal = null;
+  if (catalogInstr.match != null) {
+    matchVal =
+      typeof catalogInstr.match === 'bigint' ? catalogInstr.match : BigInt(catalogInstr.match);
+    if (Number(matchVal & 0x3n) !== 3) {
+      return null;
+    }
+  }
+  let encoding = catalogInstr.encoding;
+  if (!encoding && matchVal != null && catalogInstr.mask != null) {
+    const k = typeof catalogInstr.mask === 'bigint' ? catalogInstr.mask : BigInt(catalogInstr.mask);
+    encoding = matchMaskToEncoding(matchVal, k);
+  }
+  if (!encoding || encoding.length !== 32 || encoding.slice(30) !== '11') {
+    // Silently substituting an R-type template while keeping the cloned instruction's
+    // mnemonic and clonedFrom label is misleading — the exported JSON would misrepresent
+    // a 16-bit instruction as a 32-bit one. Return null so the UI can reject the clone
+    // and filter the sibling list to only offer 32-bit instructions.
+    return null;
   }
 
   const parsed = encodingToMatchMask(encoding);
 
-  let format = 'R';
   const varFields = Array.isArray(catalogInstr.variable_fields)
     ? [...catalogInstr.variable_fields]
     : [];
-  if (varFields.includes('imm12') || varFields.includes('imm12hi')) {
+
+  // Infer format from variable_fields, covering all six base formats.
+  // This determines which field names updateInstrField preserves on bit-edits.
+  let format = 'R';
+  if (varFields.some((f) => f.startsWith('bimm12'))) {
+    format = 'B';
+  } else if (varFields.includes('jimm20')) {
+    format = 'J';
+  } else if (varFields.includes('imm12') || varFields.includes('imm12hi')) {
     format = varFields.includes('imm12hi') ? 'S' : 'I';
   } else if (varFields.includes('imm20')) {
     format = 'U';
@@ -467,8 +517,28 @@ export function validateInstruction(
   const OPCODE_BITS = 0x7fn;
   const opcodeFullyFixed = (mask & OPCODE_BITS) === OPCODE_BITS;
   const opcodeVal = Number(match & OPCODE_BITS);
-  const opInfo = opcodeFullyFixed ? OPCODES.find((c) => c.value === opcodeVal) : null;
   const isModeAddition = extContext && extContext.mode === 'addition';
+
+  // Guard: 16-bit compressed encodings have inst[1:0] != 11. The OPCODES table is
+  // exclusively for 32-bit major opcodes; reading bits[6:0] of a 16-bit match produces
+  // fabricated values (e.g. 0x71 from Zcb) that opInfo.find() returns undefined for.
+  // Without this guard, both the isModeAddition and vendor branches are skipped entirely
+  // (all wrapped in `opInfo &&`) and the instruction passes opcode classification silently.
+  const is32bit = Number(match & 0x3n) === 3;
+  if (!is32bit) {
+    diagnostics.push({
+      severity: 'error',
+      message:
+        'This encoding sits in the 16-bit compressed instruction space (inst[1:0] \u2260 11). ' +
+        'The sandbox models 32-bit base instructions. A compressed encoding cannot be ' +
+        'validated or exported as a standard 32-bit instruction. Set bits [1:0] to 11 ' +
+        'to target 32-bit opcode space.',
+    });
+    // Still continue to the collision check — a badly-formed encoding can still
+    // alias a catalog pattern, and reporting that is useful.
+  }
+
+  const opInfo = opcodeFullyFixed && is32bit ? OPCODES.find((c) => c.value === opcodeVal) : null;
 
   if (!opcodeFullyFixed) {
     diagnostics.push({
@@ -478,11 +548,17 @@ export function validateInstruction(
         'opcode bits spans more than one opcode slot, so it cannot be shown to ' +
         'sit inside the custom space. Fix all seven bits to classify it.',
     });
+  } else if (is32bit && !opInfo) {
+    // Fully-fixed opcode bits, 32-bit instruction, but no match in the OPCODES table.
+    diagnostics.push({
+      severity: 'warning',
+      message: `Opcode 0x${opcodeVal.toString(16).padStart(2, '0')} is not a recognized RISC-V major opcode. It may be a non-standard or future-reserved value.`,
+    });
   } else if (isModeAddition) {
     if (opInfo && opInfo.type === 'custom') {
       diagnostics.push({
         severity: 'error',
-        message: `Opcode 0x${opcodeVal.toString(16).padStart(2, '0')} (${opInfo.name}) is in CUSTOM space. Custom opcode slots (custom-0..custom-3) are strictly reserved for non-standard vendor extensions and must never be used for standard extensions (RISC-V ISA §27).`,
+        message: `Opcode 0x${opcodeVal.toString(16).padStart(2, '0')} (${opInfo.name}) is in CUSTOM space. Custom opcode slots (custom-0..custom-3) are strictly reserved for non-standard vendor extensions and must never be used for standard extensions (RISC-V ISA \u00a727).`,
       });
     } else if (opInfo && opInfo.type === 'reserved') {
       diagnostics.push({
@@ -589,6 +665,24 @@ export function validateInstruction(
     diagnostics.push({ severity: 'warning', message: mnemonicDiag });
   }
 
+  // Duplicate normalized key check among sibling sandbox instructions
+  if (instr.mnemonic) {
+    const myKey = instr.mnemonic.toLowerCase().replace(/\./g, '_');
+    const dupKeySibling = (otherSandboxInstructions || []).find((other) => {
+      if (!other || !other.mnemonic || other === instr) return false;
+      return (
+        other.mnemonic !== instr.mnemonic &&
+        other.mnemonic.toLowerCase().replace(/\./g, '_') === myKey
+      );
+    });
+    if (dupKeySibling) {
+      diagnostics.push({
+        severity: 'error',
+        message: `Mnemonic "${instr.mnemonic}" normalizes to the same riscv-opcodes key ("${myKey}") as "${dupKeySibling.mnemonic}". They will overwrite each other in export.`,
+      });
+    }
+  }
+
   return diagnostics;
 }
 
@@ -658,50 +752,55 @@ export function loadSandbox() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Basic shape validation
-    return parsed
-      .filter((ext) => ext && typeof ext === 'object' && ext.id)
-      .slice(0, MAX_EXTENSIONS)
-      .map((ext) => {
-        const isAddition = ext.mode === 'addition';
-        const rawId = String(ext.id || '');
-        const enforcedId = enforcePrefix(rawId, !!ext.isOfficial, isAddition);
-        const tags =
-          Array.isArray(ext.tags) && ext.tags.length > 0
-            ? ext.tags.map(String)
-            : [`rv_${enforcedId.toLowerCase()}`];
-
-        return {
-          id: enforcedId,
-          mode: isAddition ? 'addition' : 'custom',
-          baseExtensionId: ext.baseExtensionId
-            ? String(ext.baseExtensionId)
-            : isAddition
-              ? enforcedId
-              : null,
-          isOfficial: !!ext.isOfficial,
-          name: String(ext.name || ''),
-          desc: String(ext.desc || ''),
-          opcode: typeof ext.opcode === 'number' ? ext.opcode : isAddition ? 0x57 : 0x0b,
-          tags,
-          instructions: (Array.isArray(ext.instructions) ? ext.instructions : [])
-            .filter((i) => i && typeof i === 'object')
-            .slice(0, MAX_INSTRUCTIONS)
-            .map((i) => ({
-              mnemonic: String(i.mnemonic || ''),
-              clonedFrom: i.clonedFrom ? String(i.clonedFrom) : '',
-              encoding: String(i.encoding || ''),
-              variable_fields: Array.isArray(i.variable_fields) ? i.variable_fields : [],
-              match: String(i.match || ''),
-              mask: String(i.mask || ''),
-              format: String(i.format || 'R'),
-              notes: String(i.notes || ''),
-            })),
-        };
-      });
+    return parsed.slice(0, MAX_EXTENSIONS).map(normalizeSandboxExt).filter(Boolean);
   } catch {
     return [];
   }
+}
+
+/**
+ * Normalize and validate a single sandbox extension object from any untrusted
+ * source (localStorage, URL parameter, clipboard). This is the single source
+ * of truth for shape validation across all three deserialization paths.
+ *
+ * Returns null if the object is fundamentally invalid (no id). Otherwise returns
+ * a fully-typed object with safe defaults for every field.
+ */
+export function normalizeSandboxExt(ext) {
+  if (!ext || typeof ext !== 'object' || !ext.id) return null;
+  const isAddition = ext.mode === 'addition';
+  const rawId = String(ext.id);
+  const enforcedId = enforcePrefix(rawId, !!ext.isOfficial, isAddition);
+  return {
+    id: enforcedId,
+    mode: isAddition ? 'addition' : 'custom',
+    baseExtensionId: ext.baseExtensionId
+      ? String(ext.baseExtensionId)
+      : isAddition
+        ? rawId.replace(/__sandbox$/, '')
+        : null,
+    isOfficial: !!ext.isOfficial,
+    name: String(ext.name || ''),
+    desc: String(ext.desc || ''),
+    opcode: typeof ext.opcode === 'number' ? ext.opcode : isAddition ? 0x57 : 0x0b,
+    tags:
+      Array.isArray(ext.tags) && ext.tags.length > 0
+        ? ext.tags.map(String)
+        : [`rv_${enforcedId.toLowerCase()}`],
+    instructions: (Array.isArray(ext.instructions) ? ext.instructions : [])
+      .filter((i) => i && typeof i === 'object')
+      .slice(0, MAX_INSTRUCTIONS)
+      .map((i) => ({
+        mnemonic: String(i.mnemonic || ''),
+        clonedFrom: i.clonedFrom ? String(i.clonedFrom) : '',
+        encoding: String(i.encoding || ''),
+        variable_fields: Array.isArray(i.variable_fields) ? i.variable_fields : [],
+        match: String(i.match || ''),
+        mask: String(i.mask || ''),
+        format: String(i.format || 'R'),
+        notes: String(i.notes || ''),
+      })),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -765,9 +864,7 @@ export async function deserializeSandboxAsync(value) {
 
     const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((ext) => ext && typeof ext === 'object' && ext.id)
-      .slice(0, MAX_EXTENSIONS);
+    return parsed.slice(0, MAX_EXTENSIONS).map(normalizeSandboxExt).filter(Boolean);
   } catch {
     return [];
   }
@@ -785,10 +882,15 @@ export function serializeSandbox(extensions) {
 
 export function deserializeSandbox(value) {
   if (!value || typeof value !== 'string') return [];
+  // Compressed (c:) payloads require async decompression — cannot decode synchronously.
+  // Return [] here so the caller falls back to localStorage; the async path in
+  // RISCVExplorer will resolve c: links after the initial render.
+  if (value.startsWith('c:')) return [];
   try {
-    const jsonStr = atob(fromBase64Url(value.startsWith('c:') ? '' : value)); // won't work on 'c:' in sync
+    const jsonStr = atob(fromBase64Url(value));
     const parsed = JSON.parse(jsonStr);
-    return Array.isArray(parsed) ? parsed.filter((e) => e?.id) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(0, MAX_EXTENSIONS).map(normalizeSandboxExt).filter(Boolean);
   } catch {
     return [];
   }

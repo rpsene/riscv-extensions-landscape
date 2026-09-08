@@ -36,6 +36,7 @@ import {
   allInstructionEncodings,
   serializeSandbox,
   deserializeSandbox,
+  normalizeSandboxExt,
 } from '../src/sandboxModel.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -313,7 +314,7 @@ test('Mode B createExtension initializes standard addition metadata cleanly', ()
     tags: vExt.tags,
   });
 
-  assert.equal(addition.id, 'V');
+  assert.equal(addition.id, 'V__sandbox');
   assert.equal(addition.mode, 'addition');
   assert.equal(addition.baseExtensionId, 'V');
   assert.equal(addition.isOfficial, true);
@@ -503,5 +504,154 @@ test('renaming an extension updates tags and riscv-opcodes export', () => {
   assert.ok(json.foo);
   assert.deepEqual(json.foo.extension, ['rv_xfoo'], 'Export must reflect renamed ID tag');
 });
+
+test('getExtensionMajorOpcodes guards against 16-bit compressed instructions', () => {
+  const allExts = Object.values(catalog).flat().filter(Boolean);
+  const zcbExt = allExts.find((e) => e.id === 'Zcb');
+  if (zcbExt) {
+    const opcodes = getExtensionMajorOpcodes(zcbExt);
+    // Zcb consists of 16-bit compressed instructions; none should yield pseudo-32-bit opcodes
+    for (const op of opcodes) {
+      assert.equal(op & 0x3, 3, `Opcode 0x${op.toString(16)} must have inst[1:0] == 11`);
+    }
+  }
+});
+
+test('validateInstruction flags 16-bit compressed encodings with an error', () => {
+  // 16-bit compressed encoding ending with '01' instead of '11'
+  const cInst = {
+    mnemonic: 'C_MY_INST',
+    encoding: '00000000000000000000000000000001',
+    format: 'R',
+  };
+  const diags = validateInstruction(cInst, catalogInstructions, []);
+  assert.ok(
+    diags.some(
+      (d) => d.severity === 'error' && d.message.includes('16-bit compressed instruction space'),
+    ),
+    'Must produce error diagnostic for non-32-bit (inst[1:0] != 11) encoding',
+  );
+});
+
+test('validateInstruction warns on unrecognized 32-bit major opcode', () => {
+  const origFind = OPCODES.find;
+  try {
+    OPCODES.find = () => undefined;
+    const inst = {
+      mnemonic: 'UNKNOWN_OP',
+      encoding: '0000000----------000-----0001011',
+      format: 'R',
+    };
+    const diags = validateInstruction(inst, catalogInstructions, []);
+    assert.ok(
+      diags.some(
+        (d) =>
+          d.severity === 'warning' && d.message.includes('not a recognized RISC-V major opcode'),
+      ),
+      'Must produce warning diagnostic for unknown 32-bit opcode',
+    );
+  } finally {
+    OPCODES.find = origFind;
+  }
+});
+
+test('INSTRUCTION_FORMATS defines B and J formats with valid fields', () => {
+  assert.ok(INSTRUCTION_FORMATS.B, 'Must define B format');
+  assert.ok(INSTRUCTION_FORMATS.J, 'Must define J format');
+  assert.ok(INSTRUCTION_FORMATS.B.fields.some((f) => f.name === 'bimm12hi'));
+  assert.ok(INSTRUCTION_FORMATS.B.fields.some((f) => f.name === 'bimm12lo'));
+  assert.ok(INSTRUCTION_FORMATS.J.fields.some((f) => f.name === 'jimm20'));
+});
+
+test('cloneFromCatalogInstruction infers B and J formats and rejects 16-bit instructions', () => {
+  // Branch instruction with bimm12 fields
+  const branchInstr = {
+    mnemonic: 'BEQ',
+    match: '0x00000063',
+    mask: '0x0000707f',
+    variable_fields: ['bimm12hi', 'rs2', 'rs1', 'funct3', 'bimm12lo'],
+  };
+  const clonedB = cloneFromCatalogInstruction(branchInstr, 0x63);
+  assert.ok(clonedB);
+  assert.equal(clonedB.format, 'B');
+
+  // Jump instruction with jimm20 field
+  const jumpInstr = {
+    mnemonic: 'JAL',
+    match: '0x0000006f',
+    mask: '0x0000007f',
+    variable_fields: ['jimm20', 'rd'],
+  };
+  const clonedJ = cloneFromCatalogInstruction(jumpInstr, 0x6f);
+  assert.ok(clonedJ);
+  assert.equal(clonedJ.format, 'J');
+
+  // 16-bit compressed instruction should return null
+  const compInstr = {
+    mnemonic: 'C.NOP',
+    match: '0x0001',
+    mask: '0xffff',
+    variable_fields: [],
+  };
+  const clonedC = cloneFromCatalogInstruction(compInstr, 0x01);
+  assert.equal(clonedC, null, 'Must refuse to clone 16-bit compressed instructions');
+});
+
+test('normalizeSandboxExt sanitizes malformed objects safely', () => {
+  assert.equal(normalizeSandboxExt(null), null);
+  assert.equal(normalizeSandboxExt({}), null);
+  assert.equal(normalizeSandboxExt({ id: '' }), null);
+
+  const normalized = normalizeSandboxExt({
+    id: 'Xtest',
+    instructions: 'not an array', // malformed
+  });
+  assert.ok(normalized);
+  assert.equal(normalized.id, 'Xtest');
+  assert.deepEqual(normalized.instructions, []);
+  assert.equal(normalized.mode, 'custom');
+  assert.equal(normalized.opcode, 0x0b);
+});
+
+test('validateInstruction detects duplicate normalized riscv-opcodes keys', () => {
+  const inst1 = {
+    mnemonic: 'X.MAC',
+    encoding: '0000000----------000-----0001011',
+  };
+  const inst2 = {
+    mnemonic: 'X_MAC',
+    encoding: '0000001----------000-----0001011',
+  };
+  const diags = validateInstruction(inst1, catalogInstructions, [inst2]);
+  assert.ok(
+    diags.some(
+      (d) =>
+        d.severity === 'error' && d.message.includes('normalizes to the same riscv-opcodes key'),
+    ),
+    'Must produce error diagnostic when two instructions normalize to the same key',
+  );
+});
+
+test('vendor extension ID generation picks first unused sequential number', () => {
+  const exts = [{ id: 'Xext2' }];
+  const existingIds = new Set(exts.map((e) => e.id));
+  let n = 1;
+  while (existingIds.has(`Xext${n}`)) n++;
+  assert.equal(n, 1, 'Must pick Xext1 when Xext2 already exists');
+});
+
+test('index clamp on delete follows removed index properly', () => {
+  const clampAfterDelete = (cur, removedIdx, listLengthAfterDelete) => {
+    if (cur === removedIdx) return Math.max(0, Math.min(cur, listLengthAfterDelete - 1));
+    if (cur > removedIdx) return cur - 1;
+    return cur;
+  };
+
+  assert.equal(clampAfterDelete(1, 0, 2), 0, 'Deleting preceding item shifts selection down by 1');
+  assert.equal(clampAfterDelete(1, 2, 2), 1, 'Deleting succeeding item leaves selection unchanged');
+  assert.equal(clampAfterDelete(1, 1, 1), 0, 'Deleting selected item clamps to remaining range');
+});
+
+
 
 

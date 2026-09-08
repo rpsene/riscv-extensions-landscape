@@ -53,6 +53,17 @@ import { DEPENDENCY_GRAPH } from './isaGraph.js';
 import { encodingToMatchMask, toHex32 } from './encodingUtils.js';
 import { focusableWithin, nextFocus } from './focusTrap.js';
 
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // ---------------------------------------------------------------------------
 // Severity icon helper
 // ---------------------------------------------------------------------------
@@ -296,7 +307,13 @@ export default function SandboxPanel({
   const createVendorExtension = () => {
     if (extensions.length >= MAX_EXTENSIONS) return;
     commitHistory('Add Vendor Extension');
-    const newExt = createExtension(`Xext${extensions.length + 1}`, false, 'custom');
+    // Find the first unused sequential ID to avoid reuse after deletes.
+    // createExtension(`Xext${extensions.length + 1}`) re-creates Xext2 if
+    // you have [Xext1, Xext2], delete Xext1, then add again.
+    const existingIds = new Set(extensions.map((e) => e.id));
+    let n = 1;
+    while (existingIds.has(`Xext${n}`)) n++;
+    const newExt = createExtension(`Xext${n}`, false, 'custom');
     setExtensions((prev) => [...prev, newExt]);
     setSelectedExtIdx(extensions.length);
     setSelectedInstrIdx(-1);
@@ -324,9 +341,14 @@ export default function SandboxPanel({
   const removeExtension = (idx) => {
     commitHistory('Remove Extension');
     setExtensions((prev) => prev.filter((_, i) => i !== idx));
-    if (selectedExtIdx >= extensions.length - 1) {
-      setSelectedExtIdx(Math.max(0, extensions.length - 2));
-    }
+    setSelectedExtIdx((cur) => {
+      // If deleting the selected extension, clamp to the new last index.
+      if (cur === idx) return Math.max(0, Math.min(cur, extensions.length - 2));
+      // If deleting before the selection, shift down to follow it.
+      if (cur > idx) return cur - 1;
+      // Deleting after the selection: no change.
+      return cur;
+    });
     setSelectedInstrIdx(-1);
   };
 
@@ -388,9 +410,12 @@ export default function SandboxPanel({
         return { ...e, instructions: e.instructions.filter((_, j) => j !== instrIdx) };
       }),
     );
-    if (selectedInstrIdx >= (ext?.instructions.length || 0) - 1) {
-      setSelectedInstrIdx(Math.max(-1, (ext?.instructions.length || 0) - 2));
-    }
+    setSelectedInstrIdx((cur) => {
+      const len = ext?.instructions.length || 0;
+      if (cur === instrIdx) return Math.max(-1, Math.min(cur, len - 2));
+      if (cur > instrIdx) return cur - 1;
+      return cur;
+    });
   };
 
   const updateInstrField = (field, value) => {
@@ -414,7 +439,8 @@ export default function SandboxPanel({
               if (enc.length === 32) {
                 const fmt = INSTRUCTION_FORMATS[updated.format];
                 if (fmt) {
-                  updated.variable_fields = fmt.fields
+                  const formatFieldNames = new Set(fmt.fields.map((f) => f.name));
+                  const knownVariable = fmt.fields
                     .filter((f) => {
                       // A field is variable if ANY of its bits are '-'
                       for (let b = f.bits[0]; b >= f.bits[1]; b--) {
@@ -424,6 +450,11 @@ export default function SandboxPanel({
                       return false;
                     })
                     .map((f) => f.name);
+                  // Preserve fields that were on the instruction but aren't in the format def (e.g. bimm12hi/lo)
+                  const preserved = (updated.variable_fields || []).filter(
+                    (name) => !formatFieldNames.has(name),
+                  );
+                  updated.variable_fields = [...knownVariable, ...preserved];
                 }
               }
             }
@@ -1109,13 +1140,29 @@ export default function SandboxPanel({
                                   />
                                   <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5 pr-1">
                                     {Object.entries(currentCatalogExt.instructions)
-                                      .filter(
-                                        ([mnemonic]) =>
-                                          !cloneSearchQuery.trim() ||
-                                          mnemonic
-                                            .toLowerCase()
-                                            .includes(cloneSearchQuery.toLowerCase().trim()),
-                                      )
+                                      .filter(([mnemonic, details]) => {
+                                        // 32-bit filter: skip 16-bit compressed instructions (inst[1:0] != 11)
+                                        if (details.match != null) {
+                                          try {
+                                            const matchVal =
+                                              typeof details.match === 'bigint'
+                                                ? details.match
+                                                : BigInt(details.match);
+                                            if (Number(matchVal & 0x3n) !== 3) return false;
+                                          } catch {
+                                            return false;
+                                          }
+                                        } else if (
+                                          details.encoding &&
+                                          details.encoding.length !== 32
+                                        ) {
+                                          return false;
+                                        }
+                                        if (!cloneSearchQuery.trim()) return true;
+                                        return mnemonic
+                                          .toLowerCase()
+                                          .includes(cloneSearchQuery.toLowerCase().trim());
+                                      })
                                       .slice(0, 30)
                                       .map(([mnemonic, details]) => (
                                         <button
@@ -1451,12 +1498,7 @@ export default function SandboxPanel({
                           const blob = new Blob([JSON.stringify(json, null, 2)], {
                             type: 'application/json',
                           });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `${ext.id.toLowerCase()}_opcodes.json`;
-                          a.click();
-                          URL.revokeObjectURL(url);
+                          downloadBlob(blob, `${ext.id.toLowerCase()}_opcodes.json`);
                         }}
                         disabled={ext.instructions.length === 0}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-semibold border transition-all disabled:opacity-40"
@@ -1524,14 +1566,12 @@ export default function SandboxPanel({
                           md += '```json\n' + jsonString + '\n```\n';
 
                           const blob = new Blob([md], { type: 'text/markdown' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = isAddition
-                            ? `${ext.id.toLowerCase()}_addition_proposal.md`
-                            : `${ext.id.toLowerCase()}_proposal.md`;
-                          a.click();
-                          URL.revokeObjectURL(url);
+                          downloadBlob(
+                            blob,
+                            isAddition
+                              ? `${ext.id.toLowerCase()}_addition_proposal.md`
+                              : `${ext.id.toLowerCase()}_proposal.md`,
+                          );
                         }}
                         disabled={ext.instructions.length === 0}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[11px] font-semibold border transition-all disabled:opacity-40"
