@@ -29,6 +29,11 @@ get a dependency-resolved configuration with a valid `-march` string.
   pattern against every existing one and reports overlaps.
 - **See the encoding space.** The Encoding Map draws the 32 base opcode slots,
   shaded by how many instructions each holds, and shows what is still free.
+- **Design an extension that does not exist yet.** The Custom Extension Sandbox
+  lets you draft a custom vendor extension or an addition to a ratified one,
+  lay out the bit encodings, check them against every instruction in the
+  catalogue, and export `riscv-opcodes` JSON plus a proposal document.
+  See [docs/sandbox.md](docs/sandbox.md).
 - **Link out to the specification.** Each extension links to its section on
   docs.riscv.org.
 
